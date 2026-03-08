@@ -169,7 +169,7 @@ function openNeuModal() {
 
 function closeNeuModal() {
   document.getElementById('neu-modal').classList.add('hidden');
-  ['n-kundenname','n-auftragsnummer','n-artikelnummer','n-artikelname','n-reklagrund'].forEach(id => {
+  ['n-kundenname','n-auftragsnummer','n-artikelnummer','n-artikelname','n-lieferantenname','n-lieferanten-artikelnummer','n-reklagrund'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('n-menge').value = '1';
@@ -196,6 +196,8 @@ async function submitNeuReklamation() {
   fd.append('artikelnummer', document.getElementById('n-artikelnummer').value.trim());
   fd.append('artikelname', artikelname);
   fd.append('menge', document.getElementById('n-menge').value);
+  fd.append('lieferantenname', document.getElementById('n-lieferantenname').value.trim());
+  fd.append('lieferanten_artikelnummer', document.getElementById('n-lieferanten-artikelnummer').value.trim());
   fd.append('reklagrund', reklagrund);
   fd.append('erstellt_von', userName);
   const files = document.getElementById('n-bilder').files;
@@ -371,6 +373,8 @@ function schritt1(r) {
             <div><span class="step-label">Kundenname</span><span>${escHtml(r.kundenname)}</span></div>
             <div><span class="step-label">Auftrag</span><span>${escHtml(r.auftragsnummer)} · ${formatDatum2(r.auftragsdatum)}</span></div>
             <div><span class="step-label">Artikel</span><span>${escHtml(r.artikelname)}${r.artikelnummer ? ` (${escHtml(r.artikelnummer)})` : ''} · ${r.menge}×</span></div>
+            ${r.lieferantenname ? `<div><span class="step-label">Lieferant</span><span>${escHtml(r.lieferantenname)}</span></div>` : ''}
+            ${r.lieferanten_artikelnummer ? `<div><span class="step-label">Lief.-Artikelnr.</span><span>${escHtml(r.lieferanten_artikelnummer)}</span></div>` : ''}
             <div class="full"><span class="step-label">Reklamationsgrund</span><span>${escHtml(r.reklagrund)}</span></div>
           </div>
           ${bilderHtml}
@@ -522,6 +526,8 @@ function openAktionModal(id, schritt) {
       <div class="aktion-field"><label>Artikelnummer</label><input type="text" id="e-artikelnummer" maxlength="50" value="${escHtml(r?.artikelnummer || '')}" /></div>
       <div class="aktion-field"><label>Artikelname *</label><input type="text" id="e-artikelname" maxlength="100" value="${escHtml(r?.artikelname || '')}" /></div>
       <div class="aktion-field"><label>Menge</label><input type="number" id="e-menge" min="1" max="99999" value="${r?.menge || 1}" /></div>
+      <div class="aktion-field"><label>Lieferantenname</label><input type="text" id="e-lieferantenname" maxlength="100" value="${escHtml(r?.lieferantenname || '')}" /></div>
+      <div class="aktion-field"><label>Lieferanten-Artikelnummer</label><input type="text" id="e-lieferanten-artikelnummer" maxlength="50" value="${escHtml(r?.lieferanten_artikelnummer || '')}" /></div>
       <div class="aktion-field"><label>Reklamationsgrund</label><textarea id="e-reklagrund" rows="3" maxlength="500">${escHtml(r?.reklagrund || '')}</textarea></div>`;
   } else if (schritt === 2) {
     inhalt = `<p>Hiermit wird die Reklamation als <strong>an den Lieferanten gemeldet</strong> markiert.</p>`;
@@ -616,9 +622,11 @@ async function submitAktion() {
     url  = `/api/reklamationen/${aktionReklaId}/anlage`;
     body = {
       kundenname, auftragsnummer, auftragsdatum, artikelname,
-      artikelnummer: document.getElementById('e-artikelnummer')?.value.trim() || '',
-      menge:         Number(document.getElementById('e-menge')?.value) || 1,
-      reklagrund:    document.getElementById('e-reklagrund')?.value.trim() || '',
+      artikelnummer:           document.getElementById('e-artikelnummer')?.value.trim() || '',
+      menge:                   Number(document.getElementById('e-menge')?.value) || 1,
+      lieferantenname:         document.getElementById('e-lieferantenname')?.value.trim() || '',
+      lieferanten_artikelnummer: document.getElementById('e-lieferanten-artikelnummer')?.value.trim() || '',
+      reklagrund:              document.getElementById('e-reklagrund')?.value.trim() || '',
     };
   } else if (aktionSchritt === 2) {
     url  = `/api/reklamationen/${aktionReklaId}/an-lieferant`;

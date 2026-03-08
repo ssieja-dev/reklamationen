@@ -64,6 +64,8 @@ for (const r of db.reklamationen) {
   if (r.lieferant_entscheidung_von === undefined) r.lieferant_entscheidung_von = null;
   if (r.lieferant_gutschrift_am === undefined) r.lieferant_gutschrift_am = null;
   if (r.lieferant_gutschrift_von === undefined) r.lieferant_gutschrift_von = null;
+  if (r.lieferantenname === undefined) r.lieferantenname = '';
+  if (r.lieferanten_artikelnummer === undefined) r.lieferanten_artikelnummer = '';
 }
 if (migrated) speichereDB(db);
 
@@ -141,7 +143,8 @@ app.get('/api/reklamationen', (req, res) => {
 
 app.post('/api/reklamationen', upload.array('bilder', 10), (req, res) => {
   const { kundenname, auftragsnummer, auftragsdatum, artikelnummer,
-          artikelname, menge, reklagrund, erstellt_von } = req.body;
+          artikelname, menge, reklagrund, erstellt_von,
+          lieferantenname, lieferanten_artikelnummer } = req.body;
   if (!kundenname?.trim() || !auftragsnummer?.trim() || !auftragsdatum?.trim() ||
       !artikelname?.trim() || !erstellt_von?.trim()) {
     return res.status(400).json({ error: 'Pflichtfelder fehlen' });
@@ -156,6 +159,8 @@ app.post('/api/reklamationen', upload.array('bilder', 10), (req, res) => {
     artikelnummer: (artikelnummer || '').trim(),
     artikelname: artikelname.trim(),
     menge: Number(menge) || 1,
+    lieferantenname: (lieferantenname || '').trim(),
+    lieferanten_artikelnummer: (lieferanten_artikelnummer || '').trim(),
     reklagrund: (reklagrund || '').trim(),
     bilder: (req.files || []).map(f => f.filename),
     erstellt_von: erstellt_von.trim(),
@@ -185,16 +190,19 @@ app.post('/api/reklamationen', upload.array('bilder', 10), (req, res) => {
 app.patch('/api/reklamationen/:id/anlage', (req, res) => {
   const r = db.reklamationen.find(r => r.id === parseInt(req.params.id));
   if (!r) return res.status(404).json({ error: 'Nicht gefunden' });
-  const { kundenname, auftragsnummer, auftragsdatum, artikelnummer, artikelname, menge, reklagrund } = req.body;
+  const { kundenname, auftragsnummer, auftragsdatum, artikelnummer, artikelname, menge, reklagrund,
+          lieferantenname, lieferanten_artikelnummer } = req.body;
   if (!kundenname?.trim() || !auftragsnummer?.trim() || !auftragsdatum?.trim() || !artikelname?.trim())
     return res.status(400).json({ error: 'Pflichtfelder fehlen' });
-  r.kundenname     = kundenname.trim();
-  r.auftragsnummer = auftragsnummer.trim();
-  r.auftragsdatum  = auftragsdatum.trim();
-  r.artikelnummer  = (artikelnummer || '').trim();
-  r.artikelname    = artikelname.trim();
-  r.menge          = Number(menge) || 1;
-  r.reklagrund     = (reklagrund || '').trim();
+  r.kundenname                = kundenname.trim();
+  r.auftragsnummer            = auftragsnummer.trim();
+  r.auftragsdatum             = auftragsdatum.trim();
+  r.artikelnummer             = (artikelnummer || '').trim();
+  r.artikelname               = artikelname.trim();
+  r.menge                     = Number(menge) || 1;
+  r.lieferantenname           = (lieferantenname || '').trim();
+  r.lieferanten_artikelnummer = (lieferanten_artikelnummer || '').trim();
+  r.reklagrund                = (reklagrund || '').trim();
   r.reklamationsnummer = buildReklanummer(r.auftragsnummer, r.auftragsdatum);
   speichereDB(db);
   io.emit('reklamation_update', r);
@@ -306,7 +314,7 @@ app.delete('/api/reklamationen/:id', (req, res) => {
 app.get('/api/export/csv', (req, res) => {
   const cols = [
     'Reklamationsnummer','Status','Kundenname','Auftragsnummer','Auftragsdatum',
-    'Artikelnummer','Artikelname','Menge','Reklamationsgrund',
+    'Artikelnummer','Artikelname','Menge','Lieferantenname','Lief.-Artikelnummer','Reklamationsgrund',
     'Erstellt von','Erstellt am',
     'An Lieferant von','An Lieferant am',
     'Lieferant Entscheidung','Entscheidung von','Entscheidung am',
@@ -324,7 +332,7 @@ app.get('/api/export/csv', (req, res) => {
 
   const rows = db.reklamationen.map(r => [
     r.reklamationsnummer, r.status, r.kundenname, r.auftragsnummer, r.auftragsdatum,
-    r.artikelnummer, r.artikelname, r.menge, r.reklagrund,
+    r.artikelnummer, r.artikelname, r.menge, r.lieferantenname, r.lieferanten_artikelnummer, r.reklagrund,
     r.erstellt_von, fmt(r.erstellt_am),
     r.an_lieferant_von, fmt(r.an_lieferant_am),
     r.lieferant_entscheidung, r.lieferant_entscheidung_von, fmt(r.lieferant_entscheidung_am),
