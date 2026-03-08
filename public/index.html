@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Reklamationen</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- User / Rolle Modal -->
+  <div id="user-modal" class="modal-overlay">
+    <div class="modal-box">
+      <img src="/logo.png" alt="PITUPITA" class="modal-logo" />
+      <div class="modal-app-title">Reklamationen</div>
+      <div class="modal-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <h2>Willkommen</h2>
+      <p>Gib deinen Namen ein und wähle deine Abteilung.</p>
+      <input type="text" id="user-name-input" placeholder="Dein Name..." maxlength="40" />
+      <input type="password" id="user-passwort-input" placeholder="Passwort..." maxlength="80" />
+      <div class="role-selector">
+        <label class="role-option">
+          <input type="radio" name="user-role" value="kundenservice" checked />
+          <span>Kundenservice</span>
+        </label>
+        <label class="role-option">
+          <input type="radio" name="user-role" value="einkauf" />
+          <span>Einkauf</span>
+        </label>
+        <label class="role-option">
+          <input type="radio" name="user-role" value="lager" />
+          <span>Lager</span>
+        </label>
+      </div>
+      <button id="user-name-btn" onclick="setUser()">Weiter</button>
+    </div>
+  </div>
+
+  <!-- Neue Reklamation Modal -->
+  <div id="neu-modal" class="modal-overlay hidden">
+    <div class="modal-box large">
+      <h2>Neue Reklamation</h2>
+      <div class="form-grid">
+        <div class="form-group required">
+          <label>Kundenname</label>
+          <input type="text" id="n-kundenname" placeholder="z.B. Max Mustermann" maxlength="100" />
+        </div>
+        <div class="form-group required">
+          <label>Auftragsnummer</label>
+          <input type="text" id="n-auftragsnummer" placeholder="z.B. 54321" maxlength="50" />
+        </div>
+        <div class="form-group required">
+          <label>Auftragsdatum</label>
+          <input type="date" id="n-auftragsdatum" />
+        </div>
+        <div class="form-group">
+          <label>Artikelnummer</label>
+          <input type="text" id="n-artikelnummer" placeholder="z.B. 21-4270-002" maxlength="50" />
+        </div>
+        <div class="form-group required">
+          <label>Artikelname</label>
+          <input type="text" id="n-artikelname" placeholder="z.B. Rinderlefzen" maxlength="100" />
+        </div>
+        <div class="form-group">
+          <label>Menge</label>
+          <input type="number" id="n-menge" value="1" min="1" max="99999" />
+        </div>
+        <div class="form-group full-width required">
+          <label>Reklamationsgrund</label>
+          <textarea id="n-reklagrund" placeholder="Grund der Reklamation..." rows="3" maxlength="500"></textarea>
+        </div>
+        <div class="form-group full-width">
+          <label>Kundenbilder (optional)</label>
+          <input type="file" id="n-bilder" multiple accept="image/*" />
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-submit" onclick="submitNeuReklamation()">Reklamation anlegen</button>
+        <button class="btn-secondary" onclick="closeNeuModal()">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail Modal -->
+  <div id="detail-modal" class="modal-overlay hidden">
+    <div class="modal-box xlarge">
+      <div class="detail-header">
+        <span class="detail-reklanr" id="detail-reklanr"></span>
+        <span class="detail-status-badge" id="detail-status-badge"></span>
+      </div>
+      <div class="detail-close-bar">
+        <button class="modal-close" onclick="closeDetailModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Schließen
+        </button>
+      </div>
+      <div id="detail-content" class="detail-content"></div>
+    </div>
+  </div>
+
+  <!-- Aktion Modal (Schritte 2–5) -->
+  <div id="aktion-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h2 id="aktion-titel"></h2>
+      <div id="aktion-inhalt"></div>
+      <div class="modal-actions">
+        <button class="btn-submit" id="aktion-bestaetigen-btn" onclick="submitAktion()">Bestätigen</button>
+        <button class="btn-secondary" onclick="closeAktionModal()">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <img src="/logo.png" alt="PITUPITA" class="header-logo" />
+      </div>
+      <div class="header-right">
+        <div class="connection-status">
+          <span class="dot"></span>
+          <span class="conn-label">Verbinde...</span>
+        </div>
+        <div class="current-user" onclick="changeUser()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span id="current-user-name">-</span>
+          <span class="user-role-badge" id="current-user-role"></span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Seitenüberschrift -->
+  <div class="page-title">Reklamationen</div>
+
+  <!-- Statistik -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <span class="stat-num blue" id="stat-neu">0</span>
+      <span class="stat-label">Neu</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-num orange" id="stat-bearbeitung">0</span>
+      <span class="stat-label">In Bearbeitung</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-num green" id="stat-erledigt">0</span>
+      <span class="stat-label">Erledigt</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-num gray" id="stat-gesamt">0</span>
+      <span class="stat-label">Gesamt</span>
+    </div>
+  </div>
+
+  <main>
+    <section class="card list-card">
+      <div class="card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        <h2>Reklamationen</h2>
+        <button class="btn-export hidden" id="btn-export" onclick="exportCSV()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export
+        </button>
+        <button class="btn-neu hidden" id="btn-neu" onclick="openNeuModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Neue Reklamation
+        </button>
+      </div>
+
+      <div class="list-toolbar">
+        <div class="filter-tabs">
+          <button class="tab active" onclick="setFilter('aktiv', this)">Alle aktiven</button>
+          <button class="tab" onclick="setFilter('s2', this)">→ Lieferant</button>
+          <button class="tab" onclick="setFilter('s3', this)">→ Entscheidung</button>
+          <button class="tab" onclick="setFilter('s4', this)">→ Gutschrift</button>
+          <button class="tab" onclick="setFilter('s5', this)">→ Kundenlösung</button>
+          <button class="tab" onclick="setFilter('s6', this)">→ Erledigen</button>
+          <button class="tab" onclick="setFilter('archiv', this)">Archiv</button>
+        </div>
+        <div class="search-bar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="search-input" placeholder="Rekla-Nr., Kundenname..." oninput="renderListe()" />
+        </div>
+      </div>
+
+      <div id="rekla-liste">
+        <div class="loading">
+          <div class="spinner"></div>
+          <span>Lade Daten...</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast-container"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
