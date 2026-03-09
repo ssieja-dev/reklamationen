@@ -487,6 +487,7 @@ main { max-width: 960px; margin: 0 auto; padding: 16px 16px 40px; }
 }
 .status-neu           { background: #dbeafe; color: #1e40af; }
 .status-lieferant     { background: #fef3c7; color: #92400e; }
+.status-sammel        { background: #e0f2fe; color: #0369a1; }
 .status-anerkannt     { background: #dcfce7; color: #14532d; }
 .status-abgelehnt     { background: #fee2e2; color: #7f1d1d; }
 .status-kundenloesung { background: #ede9fe; color: #4c1d95; }
@@ -701,6 +702,57 @@ main { max-width: 960px; margin: 0 auto; padding: 16px 16px 40px; }
 }
 .aktion-field input:focus { outline: none; border-color: var(--blue); }
 .aktion-field.hidden { display: none; }
+
+/* ── Bilder Dropzone ──────────────────────────────────── */
+.bilder-dropzone {
+  border: 2px dashed var(--border2);
+  border-radius: 8px;
+  padding: 20px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: .88rem;
+  user-select: none;
+}
+.bilder-dropzone svg { width: 28px; height: 28px; stroke: var(--border2); transition: stroke .15s; }
+.bilder-dropzone:hover,
+.bilder-dropzone.drag-over { border-color: var(--blue); background: #eff6ff; }
+.bilder-dropzone:hover svg,
+.bilder-dropzone.drag-over svg { stroke: var(--blue); }
+.bilder-dropzone.drag-over { border-style: solid; }
+.dropzone-link { color: var(--blue); cursor: pointer; font-weight: 600; text-decoration: underline; }
+.bilder-vorschau { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.vorschau-item { position: relative; }
+.vorschau-item img {
+  width: 72px; height: 72px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1.5px solid var(--border);
+  display: block;
+}
+.vorschau-item button {
+  position: absolute;
+  top: -6px; right: -6px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: var(--red);
+  color: #fff;
+  font-size: .9rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+}
+.vorschau-item button:hover { background: #b91c1c; }
 
 /* ── Empty / Loading ──────────────────────────────────── */
 .empty-state {

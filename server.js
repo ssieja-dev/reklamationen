@@ -216,6 +216,7 @@ app.patch('/api/reklamationen/:id/an-lieferant', (req, res) => {
   const r = db.reklamationen.find(r => r.id === parseInt(req.params.id));
   if (!r) return res.status(404).json({ error: 'Nicht gefunden' });
   const { von, typ } = req.body;
+  console.log('[an-lieferant] id=%s von=%j typ=%j', req.params.id, von, typ);
   if (!von?.trim()) return res.status(400).json({ error: 'Name erforderlich' });
   if (!['an_lieferant', 'sammelreklamation'].includes(typ))
     return res.status(400).json({ error: 'Ungültiger Typ' });
@@ -356,7 +357,7 @@ app.get('/api/export/csv', (req, res) => {
 // Sammelreklamation Export
 app.get('/api/export/sammelreklamation', (req, res) => {
   const lieferant = (req.query.lieferant || '').trim();
-  let liste = db.reklamationen.filter(r => r.schritt2_typ === 'sammelreklamation');
+  let liste = db.reklamationen.filter(r => r.schritt2_typ === 'sammelreklamation' && r.status !== 'erledigt');
   if (lieferant) {
     liste = liste.filter(r => (r.lieferantenname || '').toLowerCase() === lieferant.toLowerCase());
   }
@@ -379,7 +380,7 @@ app.get('/api/export/sammelreklamation', (req, res) => {
 // Lieferanten-Liste für Sammelreklamation
 app.get('/api/sammelreklamation/lieferanten', (req, res) => {
   const liste = db.reklamationen
-    .filter(r => r.schritt2_typ === 'sammelreklamation' && r.lieferantenname)
+    .filter(r => r.schritt2_typ === 'sammelreklamation' && r.status !== 'erledigt' && r.lieferantenname)
     .map(r => r.lieferantenname);
   res.json([...new Set(liste)].sort());
 });

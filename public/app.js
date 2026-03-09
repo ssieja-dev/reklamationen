@@ -8,9 +8,47 @@ let userRole  = localStorage.getItem('rekla_userrole') || '';
 let detailOpenId  = null;
 let aktionReklaId = null;
 let aktionSchritt = null;
+let neuBilder = [];
 
 // ── INITIALISIERUNG ───────────────────────────────────────
+function initBilderDropzone() {
+  const zone  = document.getElementById('n-bilder-zone');
+  const input = document.getElementById('n-bilder');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    addNeuBilder([...e.dataTransfer.files].filter(f => f.type.startsWith('image/')));
+  });
+  zone.addEventListener('click', e => { if (e.target !== input && e.target.htmlFor !== 'n-bilder') input.click(); });
+  input.addEventListener('change', () => { addNeuBilder([...input.files]); input.value = ''; });
+}
+
+function addNeuBilder(files) {
+  neuBilder.push(...files);
+  renderNeuBilderVorschau();
+}
+
+function removeNeuBild(index) {
+  neuBilder.splice(index, 1);
+  renderNeuBilderVorschau();
+}
+
+function renderNeuBilderVorschau() {
+  const container = document.getElementById('n-bilder-preview');
+  if (!container) return;
+  container.innerHTML = neuBilder.map((f, i) => {
+    const url = URL.createObjectURL(f);
+    return `<div class="vorschau-item">
+      <img src="${url}" alt="${escHtml(f.name)}" />
+      <button type="button" onclick="removeNeuBild(${i})" title="Entfernen">×</button>
+    </div>`;
+  }).join('');
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
+  initBilderDropzone();
   // Session prüfen — wenn keine aktive Session, Modal offen lassen
   try {
     const res = await fetch('/api/reklamationen');
@@ -186,7 +224,8 @@ function closeNeuModal() {
     document.getElementById(id).value = '';
   });
   document.getElementById('n-menge').value = '1';
-  document.getElementById('n-bilder').value = '';
+  neuBilder = [];
+  renderNeuBilderVorschau();
 }
 
 async function submitNeuReklamation() {
@@ -213,8 +252,7 @@ async function submitNeuReklamation() {
   fd.append('lieferanten_artikelnummer', document.getElementById('n-lieferanten-artikelnummer').value.trim());
   fd.append('reklagrund', reklagrund);
   fd.append('erstellt_von', userName);
-  const files = document.getElementById('n-bilder').files;
-  for (const f of files) fd.append('bilder', f);
+  for (const f of neuBilder) fd.append('bilder', f);
 
   try {
     const res = await fetch('/api/reklamationen', { method: 'POST', body: fd });
@@ -283,6 +321,7 @@ function renderListe() {
     if (aktuellerFilter === 's5' && ns?.nr !== 5) return false;
     if (aktuellerFilter === 's6' && ns?.nr !== 6) return false;
     if (aktuellerFilter === 'sammelreklamation' && r.schritt2_typ !== 'sammelreklamation') return false;
+    if (aktuellerFilter === 'sammelreklamation' && r.status === 'erledigt') return false;
     if (aktuellerFilter === 'sammelreklamation') {
       const lieferantFilter = document.getElementById('sammel-lieferant-select')?.value;
       if (lieferantFilter && r.lieferantenname !== lieferantFilter) return false;
@@ -557,7 +596,7 @@ function openAktionModal(id, schritt) {
 
   const titel = {
     1: 'Anlage bearbeiten',
-    2: 'An Lieferant gemeldet',
+    2: r?.schritt2_typ === 'sammelreklamation' ? 'Sammelreklamation' : 'An Lieferant melden',
     3: 'Lieferant-Entscheidung',
     4: 'Gutschriftsnummer Lieferant',
     5: 'Kundenlösung',
@@ -578,16 +617,15 @@ function openAktionModal(id, schritt) {
       <div class="aktion-field"><label>Lieferanten-Artikelnummer</label><input type="text" id="e-lieferanten-artikelnummer" maxlength="50" value="${escHtml(r?.lieferanten_artikelnummer || '')}" /></div>
       <div class="aktion-field"><label>Reklamationsgrund</label><textarea id="e-reklagrund" rows="3" maxlength="500">${escHtml(r?.reklagrund || '')}</textarea></div>`;
   } else if (schritt === 2) {
-    const currentTyp = r?.schritt2_typ || 'an_lieferant';
     inhalt = `
       <p>Wie soll diese Reklamation weiterverarbeitet werden?</p>
       <div class="radio-group">
         <label class="radio-option">
-          <input type="radio" name="schritt2typ" value="an_lieferant" ${currentTyp === 'an_lieferant' ? 'checked' : ''} />
+          <input type="radio" name="schritt2typ" value="an_lieferant" />
           <span>An Lieferant melden</span>
         </label>
         <label class="radio-option">
-          <input type="radio" name="schritt2typ" value="sammelreklamation" ${currentTyp === 'sammelreklamation' ? 'checked' : ''} />
+          <input type="radio" name="schritt2typ" value="sammelreklamation" />
           <span>Für Sammelreklamation speichern</span>
         </label>
       </div>`;
@@ -636,6 +674,11 @@ function openAktionModal(id, schritt) {
   document.getElementById('aktion-inhalt').innerHTML = inhalt;
 
   // Vorausfüllen bei Bearbeitung bereits erledigter Schritte
+  if (schritt === 2) {
+    const currentTyp = r?.schritt2_typ || 'an_lieferant';
+    const radio = document.querySelector(`input[name="schritt2typ"][value="${currentTyp}"]`);
+    if (radio) radio.checked = true;
+  }
   if (schritt === 3 && r?.lieferant_entscheidung) {
     const radio = document.querySelector(`input[name="entscheidung"][value="${r.lieferant_entscheidung}"]`);
     if (radio) radio.checked = true;
@@ -719,11 +762,14 @@ async function submitAktion() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error();
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || res.status);
+    }
     closeAktionModal();
     toast('Gespeichert', 'success');
-  } catch {
-    toast('Fehler beim Speichern', 'error');
+  } catch (e) {
+    toast('Fehler: ' + (e.message || 'Unbekannt'), 'error');
   }
 }
 
@@ -767,7 +813,10 @@ async function loescheReklamation(id) {
 // ── HILFSFUNKTIONEN ───────────────────────────────────────
 function getStatusInfo(r) {
   if (r.status === 'neu')                   return { label: 'Neu',              cls: 'status-neu' };
-  if (r.status === 'an_lieferant')          return { label: 'An Lieferant',     cls: 'status-lieferant' };
+  if (r.status === 'an_lieferant') {
+    if (r.schritt2_typ === 'sammelreklamation') return { label: 'Sammelreklamation', cls: 'status-sammel' };
+    return { label: 'An Lieferant', cls: 'status-lieferant' };
+  }
   if (r.status === 'lieferant_entscheidung') {
     return r.lieferant_entscheidung === 'anerkannt'
       ? { label: 'Anerkannt',  cls: 'status-anerkannt' }
