@@ -570,6 +570,7 @@ main { max-width: 960px; margin: 0 auto; padding: 16px 16px 40px; }
 .badge-loesung    { background: #ede9fe; color: #4c1d95; padding: 2px 8px; border-radius: 99px; font-size: .78rem; font-weight: 600; }
 .badge-lieferant  { background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 99px; font-size: .78rem; font-weight: 600; }
 .badge-sammel     { background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 99px; font-size: .78rem; font-weight: 600; }
+.badge-auto       { background: #f1f5f9; color: var(--gray); padding: 2px 8px; border-radius: 99px; font-size: .78rem; font-weight: 600; }
 .lieferant-hinweis {
   background: #fef3c7;
   border: 1px solid #fcd34d;

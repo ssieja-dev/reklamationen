@@ -241,6 +241,13 @@ app.patch('/api/reklamationen/:id/lieferant-entscheidung', (req, res) => {
   r.lieferant_entscheidung = entscheidung;
   r.lieferant_entscheidung_von = von.trim();
   r.lieferant_entscheidung_am  = new Date().toISOString();
+  // Schritt 4 automatisch erledigen wenn Lieferant abgelehnt hat
+  if (entscheidung === 'abgelehnt' && !r.lieferant_gutschrift_am) {
+    if (statusIdx(r.status) < statusIdx('lieferant_gutschrift')) r.status = 'lieferant_gutschrift';
+    r.lieferant_gutschriftsnummer = '';
+    r.lieferant_gutschrift_von = von.trim();
+    r.lieferant_gutschrift_am  = new Date().toISOString();
+  }
   speichereDB(db);
   io.emit('reklamation_update', r);
   res.json(r);
@@ -266,7 +273,7 @@ app.patch('/api/reklamationen/:id/kundenloesung', (req, res) => {
   const r = db.reklamationen.find(r => r.id === parseInt(req.params.id));
   if (!r) return res.status(404).json({ error: 'Nicht gefunden' });
   const { loesung, referenznummer, von } = req.body;
-  if (!['gutschrift', 'ersatz'].includes(loesung))
+  if (!['gutschrift', 'ersatz', 'abgelehnt'].includes(loesung))
     return res.status(400).json({ error: 'Ungültige Lösung' });
   if (!von?.trim()) return res.status(400).json({ error: 'Name erforderlich' });
   if (statusIdx(r.status) < statusIdx('kundenloesung')) r.status = 'kundenloesung';

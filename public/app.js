@@ -524,7 +524,7 @@ function schritt4(r, canAct) {
   if (done) {
     const gs = r.lieferant_gutschriftsnummer
       ? `Gutschriftsnr.: <strong>${escHtml(r.lieferant_gutschriftsnummer)}</strong> · `
-      : '';
+      : (r.lieferant_entscheidung === 'abgelehnt' ? '<span class="badge-auto">Automatisch erledigt</span> · ' : '');
     body = `<div class="step-done-info">${gs}Eingetragen von <strong>${escHtml(r.lieferant_gutschrift_von)}</strong> · ${formatDatum(r.lieferant_gutschrift_am)}
       <button class="btn-edit-step" onclick="openAktionModal(${r.id}, 4)" title="Ändern">✎</button></div>`;
   } else if (canAct) {
@@ -549,11 +549,16 @@ function schritt5(r, canAct) {
   const cls  = done ? 'done' : canAct ? 'active' : 'pending';
   let body;
   if (done) {
-    const lLabel   = r.kunden_loesung === 'gutschrift' ? 'Gutschrift' : 'Ersatz';
-    const refLabel = r.kunden_loesung === 'gutschrift' ? 'Gutschriftsnr.' : 'Auftragsnr.';
-    const ref = r.kunden_referenznummer
-      ? `${refLabel}: <strong>${escHtml(r.kunden_referenznummer)}</strong> · ` : '';
-    body = `<div class="step-done-info"><span class="badge-loesung">${lLabel}</span> · ${ref}Eingetragen von <strong>${escHtml(r.loesung_von)}</strong> · ${formatDatum(r.loesung_am)}
+    let loesungBadge, ref = '';
+    if (r.kunden_loesung === 'abgelehnt') {
+      loesungBadge = `<span class="badge-abgelehnt">✗ Abgelehnt</span>`;
+    } else {
+      const lLabel   = r.kunden_loesung === 'gutschrift' ? 'Gutschrift' : 'Ersatz';
+      const refLabel = r.kunden_loesung === 'gutschrift' ? 'Gutschriftsnr.' : 'Auftragsnr.';
+      loesungBadge = `<span class="badge-loesung">${lLabel}</span>`;
+      ref = r.kunden_referenznummer ? `${refLabel}: <strong>${escHtml(r.kunden_referenznummer)}</strong> · ` : '';
+    }
+    body = `<div class="step-done-info">${loesungBadge} · ${ref}Eingetragen von <strong>${escHtml(r.loesung_von)}</strong> · ${formatDatum(r.loesung_am)}
       <button class="btn-edit-step" onclick="openAktionModal(${r.id}, 5)" title="Ändern">✎</button></div>`;
   } else if (canAct) {
     body = `<button class="btn-action" onclick="openAktionModal(${r.id}, 5)">Kundenlösung eintragen</button>`;
@@ -662,8 +667,12 @@ function openAktionModal(id, schritt) {
           <input type="radio" name="loesung" value="ersatz" onchange="toggleLoesungRef()" />
           <span>Ersatz</span>
         </label>
+        <label class="radio-option">
+          <input type="radio" name="loesung" value="abgelehnt" onchange="toggleLoesungRef()" />
+          <span class="radio-abgelehnt">✗ Abgelehnt</span>
+        </label>
       </div>
-      <div class="aktion-field">
+      <div class="aktion-field" id="loesung-ref-field">
         <label id="loesung-ref-label">Referenznummer (optional)</label>
         <input type="text" id="input-loesung-ref" placeholder="Nummer eintragen..." maxlength="80" />
       </div>`;
@@ -700,7 +709,9 @@ function openAktionModal(id, schritt) {
 function toggleLoesungRef() {
   const loesung = document.querySelector('input[name="loesung"]:checked')?.value;
   const label   = document.getElementById('loesung-ref-label');
+  const field   = document.getElementById('loesung-ref-field');
   if (label) label.textContent = loesung === 'gutschrift' ? 'Gutschriftsnummer (optional)' : 'Auftragsnummer (optional)';
+  if (field) field.classList.toggle('hidden', loesung === 'abgelehnt');
 }
 
 function closeAktionModal() {
