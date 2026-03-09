@@ -25,6 +25,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     document.getElementById('btn-neu').classList.remove('hidden');
     document.getElementById('btn-export').classList.remove('hidden');
+    document.getElementById('btn-logout').classList.remove('hidden');
     const daten = await res.json();
     alleReklamationen = daten;
     renderListe();
@@ -81,12 +82,24 @@ async function setUser() {
   updateUserDisplay();
   document.getElementById('btn-neu').classList.remove('hidden');
   document.getElementById('btn-export').classList.remove('hidden');
+  document.getElementById('btn-logout').classList.remove('hidden');
   ladeReklamationen();
   ladeStatistik();
 }
 
 function closeUserModal() {
   document.getElementById('user-modal').classList.add('hidden');
+}
+
+async function logout() {
+  try { await fetch('/api/logout', { method: 'POST' }); } catch {}
+  document.getElementById('btn-neu').classList.add('hidden');
+  document.getElementById('btn-export').classList.add('hidden');
+  document.getElementById('btn-logout').classList.add('hidden');
+  document.getElementById('user-passwort-input').value = '';
+  alleReklamationen = [];
+  renderListe();
+  document.getElementById('user-modal').classList.remove('hidden');
 }
 
 function changeUser() {
@@ -228,7 +241,33 @@ function setFilter(filter, btn) {
   aktuellerFilter = filter;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
+  const sammelToolbar = document.getElementById('sammel-toolbar');
+  if (filter === 'sammelreklamation') {
+    sammelToolbar.classList.remove('hidden');
+    aktualisiereSammelLieferanten();
+  } else {
+    sammelToolbar.classList.add('hidden');
+  }
   renderListe();
+}
+
+async function aktualisiereSammelLieferanten() {
+  try {
+    const res = await fetch('/api/sammelreklamation/lieferanten');
+    const liste = await res.json();
+    const sel = document.getElementById('sammel-lieferant-select');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">Alle Lieferanten</option>' +
+      liste.map(l => `<option value="${escHtml(l)}" ${l === current ? 'selected' : ''}>${escHtml(l)}</option>`).join('');
+  } catch {}
+}
+
+function exportSammelreklamation() {
+  const lieferant = document.getElementById('sammel-lieferant-select').value;
+  const url = '/api/export/sammelreklamation' + (lieferant ? `?lieferant=${encodeURIComponent(lieferant)}` : '');
+  const a = document.createElement('a');
+  a.href = url;
+  a.click();
 }
 
 function renderListe() {
@@ -243,6 +282,11 @@ function renderListe() {
     if (aktuellerFilter === 's4' && ns?.nr !== 4) return false;
     if (aktuellerFilter === 's5' && ns?.nr !== 5) return false;
     if (aktuellerFilter === 's6' && ns?.nr !== 6) return false;
+    if (aktuellerFilter === 'sammelreklamation' && r.schritt2_typ !== 'sammelreklamation') return false;
+    if (aktuellerFilter === 'sammelreklamation') {
+      const lieferantFilter = document.getElementById('sammel-lieferant-select')?.value;
+      if (lieferantFilter && r.lieferantenname !== lieferantFilter) return false;
+    }
     if (suchtext) {
       const hay = `${r.reklamationsnummer} ${r.kundenname} ${r.artikelname} ${r.artikelnummer}`.toLowerCase();
       if (!hay.includes(suchtext)) return false;
@@ -314,12 +358,12 @@ function renderDetail(r) {
   badge.textContent = statusInfo.label;
   badge.className = `detail-status-badge ${statusInfo.cls}`;
 
-  // Alle Abteilungen können alle Schritte — nur Zeitstempel entscheiden
+  // Alle Schritte sind unabhängig bearbeitbar
   const canStep2 = !r.an_lieferant_am;
-  const canStep3 = !!r.an_lieferant_am && !r.lieferant_entscheidung_am;
-  const canStep4 = !!r.lieferant_entscheidung_am && !r.lieferant_gutschrift_am;
-  const canStep5 = !!r.lieferant_gutschrift_am && !r.loesung_am;
-  const canStep6 = !!r.loesung_am && !r.erledigt_am;
+  const canStep3 = !r.lieferant_entscheidung_am;
+  const canStep4 = !r.lieferant_gutschrift_am;
+  const canStep5 = !r.loesung_am;
+  const canStep6 = !r.erledigt_am;
 
   document.getElementById('detail-content').innerHTML = `
     <div class="timeline">
@@ -388,18 +432,22 @@ function schritt1(r) {
 
 function schritt2(r, canAct) {
   const done = !!r.an_lieferant_am;
-  const cls  = done ? 'done' : canAct ? 'active' : 'pending';
-  const body = done
-    ? `<div class="step-done-info">Gemeldet von <strong>${escHtml(r.an_lieferant_von)}</strong> · ${formatDatum(r.an_lieferant_am)}
-        <button class="btn-edit-step" onclick="openAktionModal(${r.id}, 2)" title="Ändern">✎</button></div>`
-    : canAct
-      ? `<button class="btn-action" onclick="openAktionModal(${r.id}, 2)">Als an Lieferant gemeldet markieren</button>`
-      : `<p class="step-pending-text">Vorheriger Schritt ausstehend.</p>`;
+  const cls  = done ? 'done' : 'active';
+  let body;
+  if (done) {
+    const typLabel = r.schritt2_typ === 'sammelreklamation'
+      ? '<span class="badge-sammel">Sammelreklamation</span>'
+      : '<span class="badge-lieferant">An Lieferant gemeldet</span>';
+    body = `<div class="step-done-info">${typLabel} · von <strong>${escHtml(r.an_lieferant_von)}</strong> · ${formatDatum(r.an_lieferant_am)}
+        <button class="btn-edit-step" onclick="openAktionModal(${r.id}, 2)" title="Ändern">✎</button></div>`;
+  } else {
+    body = `<button class="btn-action" onclick="openAktionModal(${r.id}, 2)">Weiterverarbeitung festlegen</button>`;
+  }
   return `
     <div class="timeline-step ${cls}">
       <div class="step-marker ${cls}">${done ? '✓' : '2'}</div>
       <div class="step-body">
-        <div class="step-title">Schritt 2 — An Lieferant gemeldet</div>
+        <div class="step-title">Schritt 2 — An Lieferant / Sammelreklamation</div>
         <div class="step-content">${body}</div>
       </div>
     </div>`;
@@ -530,7 +578,19 @@ function openAktionModal(id, schritt) {
       <div class="aktion-field"><label>Lieferanten-Artikelnummer</label><input type="text" id="e-lieferanten-artikelnummer" maxlength="50" value="${escHtml(r?.lieferanten_artikelnummer || '')}" /></div>
       <div class="aktion-field"><label>Reklamationsgrund</label><textarea id="e-reklagrund" rows="3" maxlength="500">${escHtml(r?.reklagrund || '')}</textarea></div>`;
   } else if (schritt === 2) {
-    inhalt = `<p>Hiermit wird die Reklamation als <strong>an den Lieferanten gemeldet</strong> markiert.</p>`;
+    const currentTyp = r?.schritt2_typ || 'an_lieferant';
+    inhalt = `
+      <p>Wie soll diese Reklamation weiterverarbeitet werden?</p>
+      <div class="radio-group">
+        <label class="radio-option">
+          <input type="radio" name="schritt2typ" value="an_lieferant" ${currentTyp === 'an_lieferant' ? 'checked' : ''} />
+          <span>An Lieferant melden</span>
+        </label>
+        <label class="radio-option">
+          <input type="radio" name="schritt2typ" value="sammelreklamation" ${currentTyp === 'sammelreklamation' ? 'checked' : ''} />
+          <span>Für Sammelreklamation speichern</span>
+        </label>
+      </div>`;
   } else if (schritt === 3) {
     inhalt = `
       <p>Entscheidung des Lieferanten:</p>
@@ -629,8 +689,10 @@ async function submitAktion() {
       reklagrund:              document.getElementById('e-reklagrund')?.value.trim() || '',
     };
   } else if (aktionSchritt === 2) {
+    const typ = document.querySelector('input[name="schritt2typ"]:checked')?.value;
+    if (!typ) { toast('Bitte eine Option wählen.', 'error'); return; }
     url  = `/api/reklamationen/${aktionReklaId}/an-lieferant`;
-    body = { von: userName };
+    body = { von: userName, typ };
   } else if (aktionSchritt === 3) {
     const entscheidung = document.querySelector('input[name="entscheidung"]:checked')?.value;
     if (!entscheidung) { toast('Bitte Anerkannt oder Abgelehnt wählen.', 'error'); return; }

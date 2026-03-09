@@ -66,6 +66,7 @@ for (const r of db.reklamationen) {
   if (r.lieferant_gutschrift_von === undefined) r.lieferant_gutschrift_von = null;
   if (r.lieferantenname === undefined) r.lieferantenname = '';
   if (r.lieferanten_artikelnummer === undefined) r.lieferanten_artikelnummer = '';
+  if (r.schritt2_typ === undefined) r.schritt2_typ = r.an_lieferant_am ? 'an_lieferant' : null;
 }
 if (migrated) speichereDB(db);
 
@@ -166,6 +167,7 @@ app.post('/api/reklamationen', upload.array('bilder', 10), (req, res) => {
     erstellt_von: erstellt_von.trim(),
     erstellt_am: new Date().toISOString(),
     // Schritt 2
+    schritt2_typ: null,
     an_lieferant_von: null, an_lieferant_am: null,
     // Schritt 3
     lieferant_entscheidung: null,
@@ -209,15 +211,18 @@ app.patch('/api/reklamationen/:id/anlage', (req, res) => {
   res.json(r);
 });
 
-// Schritt 2: An Lieferant gemeldet
+// Schritt 2: An Lieferant gemeldet / Sammelreklamation
 app.patch('/api/reklamationen/:id/an-lieferant', (req, res) => {
   const r = db.reklamationen.find(r => r.id === parseInt(req.params.id));
   if (!r) return res.status(404).json({ error: 'Nicht gefunden' });
-  const { von } = req.body;
+  const { von, typ } = req.body;
   if (!von?.trim()) return res.status(400).json({ error: 'Name erforderlich' });
+  if (!['an_lieferant', 'sammelreklamation'].includes(typ))
+    return res.status(400).json({ error: 'Ungültiger Typ' });
   if (statusIdx(r.status) < statusIdx('an_lieferant')) r.status = 'an_lieferant';
+  r.schritt2_typ     = typ;
   r.an_lieferant_von = von.trim();
-  r.an_lieferant_am = new Date().toISOString();
+  r.an_lieferant_am  = new Date().toISOString();
   speichereDB(db);
   io.emit('reklamation_update', r);
   res.json(r);
@@ -346,6 +351,37 @@ app.get('/api/export/csv', (req, res) => {
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="Reklamationen_${datum}.csv"`);
   res.send(csv);
+});
+
+// Sammelreklamation Export
+app.get('/api/export/sammelreklamation', (req, res) => {
+  const lieferant = (req.query.lieferant || '').trim();
+  let liste = db.reklamationen.filter(r => r.schritt2_typ === 'sammelreklamation');
+  if (lieferant) {
+    liste = liste.filter(r => (r.lieferantenname || '').toLowerCase() === lieferant.toLowerCase());
+  }
+  const cols = ['Reklamationsnummer', 'Lieferanten-Artikelnummer', 'Menge', 'Reklamationsgrund'];
+  const esc  = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const rows = liste.map(r => [
+    r.reklamationsnummer,
+    r.lieferanten_artikelnummer || '',
+    r.menge,
+    r.reklagrund
+  ].map(esc).join(';'));
+  const csv  = '\uFEFF' + cols.map(esc).join(';') + '\r\n' + rows.join('\r\n');
+  const datum = new Date().toISOString().slice(0, 10);
+  const safeName = lieferant ? lieferant.replace(/[^a-zA-Z0-9_\-äöüÄÖÜß ]/g, '_') : 'alle';
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="Sammelreklamation_${safeName}_${datum}.csv"`);
+  res.send(csv);
+});
+
+// Lieferanten-Liste für Sammelreklamation
+app.get('/api/sammelreklamation/lieferanten', (req, res) => {
+  const liste = db.reklamationen
+    .filter(r => r.schritt2_typ === 'sammelreklamation' && r.lieferantenname)
+    .map(r => r.lieferantenname);
+  res.json([...new Set(liste)].sort());
 });
 
 // Statistik
