@@ -313,6 +313,34 @@ app.post('/api/reklamationen/:id/hinweis', (req, res) => {
   res.json(r);
 });
 
+// Erledigt rückgängig
+app.patch('/api/reklamationen/:id/erledigt-rueckgaengig', (req, res) => {
+  const r = db.reklamationen.find(r => r.id === parseInt(req.params.id));
+  if (!r) return res.status(404).json({ error: 'Nicht gefunden' });
+  if (r.status !== 'erledigt') return res.status(400).json({ error: 'Nicht erledigt' });
+  r.status      = 'kundenloesung';
+  r.erledigt_von = null;
+  r.erledigt_am  = null;
+  speichereDB(db);
+  io.emit('reklamation_update', r);
+  res.json(r);
+});
+
+// Hinweis bearbeiten
+app.patch('/api/reklamationen/:id/hinweis/:idx', (req, res) => {
+  const r = db.reklamationen.find(r => r.id === parseInt(req.params.id));
+  if (!r) return res.status(404).json({ error: 'Nicht gefunden' });
+  const idx = parseInt(req.params.idx);
+  if (isNaN(idx) || idx < 0 || idx >= r.hinweise.length)
+    return res.status(400).json({ error: 'Ungültiger Index' });
+  const { text } = req.body;
+  if (!text?.trim()) return res.status(400).json({ error: 'Text erforderlich' });
+  r.hinweise[idx].text = text.trim();
+  speichereDB(db);
+  io.emit('reklamation_update', r);
+  res.json(r);
+});
+
 // Löschen
 app.delete('/api/reklamationen/:id', (req, res) => {
   const idx = db.reklamationen.findIndex(r => r.id === parseInt(req.params.id));

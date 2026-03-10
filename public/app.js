@@ -346,14 +346,39 @@ function renderListe() {
   container.innerHTML = gefiltert.map(r => renderKarte(r)).join('');
 }
 
+const SCHRITTE = [
+  { nr: 1, kurz: 'Neu' },
+  { nr: 2, kurz: 'Lieferant' },
+  { nr: 3, kurz: 'Entscheidung' },
+  { nr: 4, kurz: 'Gutschrift' },
+  { nr: 5, kurz: 'Lösung' },
+  { nr: 6, kurz: 'Erledigt' },
+];
+
+function aktiverSchritt(r) {
+  if (r.erledigt_am)               return 6;
+  if (r.loesung_am)                return 5;
+  if (r.lieferant_gutschrift_am)   return 4;
+  if (r.lieferant_entscheidung_am) return 3;
+  if (r.an_lieferant_am)           return 2;
+  return 1;
+}
+
+function renderSchrittLeiste(r) {
+  const aktiv = aktiverSchritt(r);
+  return `<div class="schritt-leiste">${SCHRITTE.map(s => {
+    const done = s.nr < aktiv;
+    const current = s.nr === aktiv;
+    const cls = done ? 'sl-done' : current ? 'sl-active' : 'sl-pending';
+    const marker = done ? '✓' : s.nr;
+    return `<div class="sl-step ${cls}"><span class="sl-nr">${marker}</span><span class="sl-label">${s.kurz}</span></div>`;
+  }).join('')}</div>`;
+}
+
 function renderKarte(r) {
   const statusInfo = getStatusInfo(r);
-  const ns = getNextStep(r);
   const hinweiseBadge = r.hinweise.length > 0
     ? `<span class="hinweise-badge">💬 ${r.hinweise.length}</span>`
-    : '';
-  const nextStepBadge = ns
-    ? `<span class="next-step-badge">→ Schritt ${ns.nr}: ${escHtml(ns.label)}</span>`
     : '';
   return `
     <div class="rekla-card" onclick="openDetail(${r.id})">
@@ -369,9 +394,9 @@ function renderKarte(r) {
         <div class="rekla-artikel">${escHtml(r.artikelname)}${r.artikelnummer ? ` <span class="rekla-artnr">(${escHtml(r.artikelnummer)})</span>` : ''} · ${r.menge}×</div>
         <div class="rekla-grund">${escHtml(r.reklagrund)}</div>
       </div>
+      ${renderSchrittLeiste(r)}
       <div class="rekla-card-footer">
         <span>${formatDatum(r.erstellt_am)} · ${escHtml(r.erstellt_von)}</span>
-        ${nextStepBadge}
       </div>
     </div>`;
 }
@@ -421,10 +446,13 @@ function renderDetail(r) {
       <div class="hinweise-list">
         ${r.hinweise.length === 0
           ? '<p class="no-hinweise">Noch keine Hinweise.</p>'
-          : r.hinweise.map(h => `
-            <div class="hinweis-item">
+          : r.hinweise.map((h, idx) => `
+            <div class="hinweis-item" id="hinweis-item-${r.id}-${idx}">
               <div class="hinweis-text">${escHtml(h.text)}</div>
-              <div class="hinweis-meta">${escHtml(h.von)} · ${formatDatum(h.am)}</div>
+              <div class="hinweis-meta">
+                ${escHtml(h.von)} · ${formatDatum(h.am)}
+                <button class="hinweis-edit-btn" onclick="editHinweis(${r.id}, ${idx})" title="Bearbeiten">✏</button>
+              </div>
             </div>`).join('')}
       </div>
       <div class="hinweis-add">
@@ -579,7 +607,9 @@ function schritt6(r, canAct) {
   const done = !!r.erledigt_am;
   const cls  = done ? 'done' : canAct ? 'active' : 'pending';
   const body = done
-    ? `<div class="step-done-info">Erledigt von <strong>${escHtml(r.erledigt_von)}</strong> · ${formatDatum(r.erledigt_am)}</div>`
+    ? `<div class="step-done-info">Erledigt von <strong>${escHtml(r.erledigt_von)}</strong> · ${formatDatum(r.erledigt_am)}
+        <button class="btn-rueckgaengig" onclick="erledigtRueckgaengig(${r.id})">Rückgängig</button>
+       </div>`
     : canAct
       ? `<button class="btn-action btn-erledigt" onclick="openAktionModal(${r.id}, 6)">Als vollständig erledigt markieren</button>`
       : `<p class="step-pending-text">Vorheriger Schritt ausstehend.</p>`;
@@ -785,6 +815,55 @@ async function submitAktion() {
 }
 
 // ── HINWEISE ──────────────────────────────────────────────
+function editHinweis(rekId, idx) {
+  const item = document.getElementById(`hinweis-item-${rekId}-${idx}`);
+  if (!item) return;
+  const textDiv = item.querySelector('.hinweis-text');
+  const currentText = textDiv.textContent;
+  item.innerHTML = `
+    <textarea class="hinweis-edit-textarea" rows="2" maxlength="500">${escHtml(currentText)}</textarea>
+    <div class="hinweis-edit-actions">
+      <button onclick="saveHinweis(${rekId}, ${idx})">Speichern</button>
+      <button class="btn-cancel" onclick="cancelEditHinweis(${rekId}, ${idx}, ${JSON.stringify(currentText)})">Abbrechen</button>
+    </div>`;
+  item.querySelector('textarea').focus();
+}
+
+function cancelEditHinweis(rekId, idx, originalText) {
+  const rek = alleReklamationen.find(r => r.id === rekId);
+  if (!rek) return;
+  renderDetail(rek);
+}
+
+async function saveHinweis(rekId, idx) {
+  const item = document.getElementById(`hinweis-item-${rekId}-${idx}`);
+  if (!item) return;
+  const text = item.querySelector('textarea')?.value.trim();
+  if (!text) { shake(item.querySelector('textarea')); return; }
+  try {
+    const res = await fetch(`/api/reklamationen/${rekId}/hinweis/${idx}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) throw new Error();
+    toast('Hinweis aktualisiert', 'success');
+  } catch {
+    toast('Fehler beim Speichern', 'error');
+  }
+}
+
+async function erledigtRueckgaengig(id) {
+  if (!confirm('Erledigung wirklich rückgängig machen?')) return;
+  try {
+    const res = await fetch(`/api/reklamationen/${id}/erledigt-rueckgaengig`, { method: 'PATCH' });
+    if (!res.ok) throw new Error();
+    toast('Erledigung zurückgesetzt', 'success');
+  } catch {
+    toast('Fehler beim Zurücksetzen', 'error');
+  }
+}
+
 async function addHinweis(id) {
   const text = document.getElementById('hinweis-input')?.value.trim();
   if (!text) { shake(document.getElementById('hinweis-input')); return; }
