@@ -48,22 +48,39 @@ function renderNeuBilderVorschau() {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
+  const backBtn = document.getElementById('portal-back-btn');
+  if (backBtn) backBtn.href = `http://${window.location.hostname}:3003`;
+
   initBilderDropzone();
+
+  // Portal-Session prüfen
+  try {
+    const meRes = await fetch('/api/me');
+    if (meRes.ok) {
+      const me = await meRes.json();
+      if (me.name) {
+        userName = me.name;
+        userRole = 'lager';
+        localStorage.setItem('rekla_user', me.name);
+        localStorage.setItem('rekla_role', 'lager');
+      }
+    }
+  } catch {}
+
   // Session prüfen — wenn keine aktive Session, Modal offen lassen
   try {
     const res = await fetch('/api/reklamationen');
     if (res.status === 401) {
-      // Nicht angemeldet — Modal zeigen
+      zeigeLoginModal();
       return;
     }
-    // Angemeldet — weiter
+    // Angemeldet
     if (userName && userRole) {
       closeUserModal();
       updateUserDisplay();
     }
     document.getElementById('btn-neu').classList.remove('hidden');
     document.getElementById('btn-export').classList.remove('hidden');
-    document.getElementById('btn-logout').classList.remove('hidden');
     const daten = await res.json();
     alleReklamationen = daten;
     renderListe();
@@ -355,22 +372,23 @@ const SCHRITTE = [
   { nr: 6, kurz: 'Erledigt' },
 ];
 
-function aktiverSchritt(r) {
-  if (r.erledigt_am)               return 6;
-  if (r.loesung_am)                return 5;
-  if (r.lieferant_gutschrift_am)   return 4;
-  if (r.lieferant_entscheidung_am) return 3;
-  if (r.an_lieferant_am)           return 2;
-  return 1;
-}
-
 function renderSchrittLeiste(r) {
-  const aktiv = aktiverSchritt(r);
-  return `<div class="schritt-leiste">${SCHRITTE.map(s => {
-    const done = s.nr < aktiv;
-    const current = s.nr === aktiv;
-    const cls = done ? 'sl-done' : current ? 'sl-active' : 'sl-pending';
-    const marker = done ? '✓' : s.nr;
+  const done = [
+    true,
+    !!r.an_lieferant_am,
+    !!r.lieferant_entscheidung_am,
+    !!r.lieferant_gutschrift_am,
+    !!r.loesung_am,
+    !!r.erledigt_am,
+  ];
+  // aktiver Schritt = erster nicht erledigter
+  const aktivIdx = done.findIndex(d => !d);
+  const aktivNr = aktivIdx === -1 ? 7 : aktivIdx + 1;
+  return `<div class="schritt-leiste">${SCHRITTE.map((s, i) => {
+    const isDone = done[i];
+    const isCurrent = !isDone && s.nr === aktivNr;
+    const cls = isDone ? 'sl-done' : isCurrent ? 'sl-active' : 'sl-pending';
+    const marker = isDone ? '✓' : s.nr;
     return `<div class="sl-step ${cls}"><span class="sl-nr">${marker}</span><span class="sl-label">${s.kurz}</span></div>`;
   }).join('')}</div>`;
 }

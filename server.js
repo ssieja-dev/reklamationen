@@ -17,6 +17,19 @@ const fs      = require('fs');
 const path    = require('path');
 const multer  = require('multer');
 
+function validierePortalToken(token) {
+  return new Promise((resolve, reject) => {
+    http.get(`http://localhost:3003/api/app-token/${token}`, res => {
+      let data = '';
+      res.on('data', d => data += d);
+      res.on('end', () => {
+        if (res.statusCode === 200) resolve(JSON.parse(data));
+        else reject(new Error('Ungültig'));
+      });
+    }).on('error', reject);
+  });
+}
+
 const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server);
@@ -90,11 +103,27 @@ const upload = multer({
 // ── Middleware ────────────────────────────────────────────
 app.use(express.json());
 app.use(session({
+  name: 'rekla.sid',
   secret: 'rekla-secret-2024',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 8 * 60 * 60 * 1000 } // 8 Stunden
+  cookie: { maxAge: 8 * 60 * 60 * 1000 }
 }));
+
+// Portal-Token abfangen
+app.get('/', async (req, res, next) => {
+  const token = req.query.portal_token;
+  if (!token) return next();
+  try {
+    const user = await validierePortalToken(token);
+    req.session.angemeldet = true;
+    req.session.userName = user.name;
+    res.redirect('/');
+  } catch {
+    res.redirect('/');
+  }
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
@@ -113,6 +142,13 @@ app.post('/api/login', (req, res) => {
 app.post('/api/logout', (req, res) => {
   req.session.destroy();
   res.json({ ok: true });
+});
+
+app.get('/api/me', (req, res) => {
+  if (req.session?.angemeldet && req.session?.userName)
+    res.json({ name: req.session.userName });
+  else
+    res.status(401).json({ error: 'Nicht angemeldet' });
 });
 
 // ── Auth-Middleware für alle API-Routen ───────────────────
