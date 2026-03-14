@@ -230,12 +230,7 @@ header {
 .header-controls-row {
   display: flex; align-items: center; justify-content: space-between; gap: .5rem;
 }
-.portal-back-btn {
-  display: flex; align-items: center; gap: .35rem;
-  background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
-  padding: .4rem .8rem; color: var(--muted); font-size: .82rem;
-  text-decoration: none; transition: color .15s, border-color .15s; flex-shrink: 0;
-}
+
 .header-logo { height: 52px; width: auto; max-width: 200px; display: block; object-fit: contain; }
 .header-right { display: flex; align-items: center; gap: .6rem; }
 
@@ -868,3 +863,10 @@ input:-webkit-autofill {
   .header-logo { height: 30px; }
   .filter-tabs { flex-wrap: wrap; }
 }
+.portal-back-btn {
+  display: inline-flex; align-items: center; gap: .4rem;
+  background: var(--blue); border: 1px solid var(--blue); border-radius: 8px;
+  padding: .5rem 1.1rem; color: #fff; font-size: .9rem; font-weight: 600;
+  text-decoration: none; transition: background .15s; flex-shrink: 0;
+}
+.portal-back-btn:hover { background: #2563eb; border-color: #2563eb; }

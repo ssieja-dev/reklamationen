@@ -49,7 +49,11 @@ function renderNeuBilderVorschau() {
 
 window.addEventListener('DOMContentLoaded', async () => {
   const backBtn = document.getElementById('portal-back-btn');
-  if (backBtn) backBtn.href = `http://${window.location.hostname}:3003`;
+  if (backBtn) {
+    fetch('/api/config').then(r => r.json()).then(cfg => {
+      backBtn.href = `http://${window.location.hostname}:${cfg.portalPort}`;
+    });
+  }
 
   initBilderDropzone();
 
@@ -168,9 +172,8 @@ function changeUser() {
 function updateUserDisplay() {
   document.getElementById('current-user-name').textContent = userName || '?';
   const badge = document.getElementById('current-user-role');
-  const labels = { kundenservice: 'Kundenservice', einkauf: 'Einkauf', lager: 'Lager' };
-  badge.textContent = labels[userRole] || '';
-  badge.className = `user-role-badge role-${userRole}`;
+  badge.textContent = '';
+  badge.className = '';
 }
 
 // ── SOCKET.IO ─────────────────────────────────────────────

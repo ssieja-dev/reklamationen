@@ -171,6 +171,9 @@ function buildReklanummer(auftragsnummer, auftragsdatum) {
 }
 
 // ── API ───────────────────────────────────────────────────
+const PORTAL_PORT = process.env.PORTAL_PORT || 3003;
+app.get('/api/config', (req, res) => res.json({ portalPort: PORTAL_PORT }));
+
 app.get('/api/reklamationen', (req, res) => {
   const sorted = [...db.reklamationen].sort((a, b) =>
     new Date(b.erstellt_am) - new Date(a.erstellt_am)
