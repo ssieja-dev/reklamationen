@@ -113,7 +113,10 @@ app.use(session({
 // Portal-Token abfangen
 app.get('/', async (req, res, next) => {
   const token = req.query.portal_token;
-  if (!token) return next();
+  if (!token) {
+    if (!req.session?.angemeldet) return res.redirect(`http://${req.hostname}:${PORTAL_PORT}/`);
+    return next();
+  }
   try {
     const user = await validierePortalToken(token);
     req.session.angemeldet = true;
