@@ -438,10 +438,11 @@ app.get('/api/export/sammelreklamation', (req, res) => {
   if (lieferant) {
     liste = liste.filter(r => (r.lieferantenname || '').toLowerCase() === lieferant.toLowerCase());
   }
-  const cols = ['Reklamationsnummer', 'Lieferanten-Artikelnummer', 'Menge', 'Reklamationsgrund'];
+  const cols = ['Reklamationsnummer', 'Artikelname', 'Lieferanten-Artikelnummer', 'Menge', 'Reklamationsgrund'];
   const esc  = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const rows = liste.map(r => [
     r.reklamationsnummer,
+    r.artikelname || '',
     r.lieferanten_artikelnummer || '',
     r.menge,
     r.reklagrund

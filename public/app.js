@@ -9,6 +9,7 @@ let detailOpenId  = null;
 let aktionReklaId = null;
 let aktionSchritt = null;
 let neuBilder = [];
+let sammelAusblenden = false;
 
 // ── INITIALISIERUNG ───────────────────────────────────────
 function initBilderDropzone() {
@@ -89,6 +90,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     alleReklamationen = daten;
     renderListe();
     ladeStatistik();
+    updateSammelStat();
   } catch {
     toast('Fehler beim Laden', 'error');
   }
@@ -229,6 +231,14 @@ async function ladeStatistik() {
     animateNum('stat-erledigt', d.erledigt);
     animateNum('stat-gesamt', d.gesamt);
   } catch {}
+  updateSammelStat();
+}
+
+function updateSammelStat() {
+  const sammelCount = alleReklamationen.filter(r => r.schritt2_typ === 'sammelreklamation' && r.status !== 'erledigt').length;
+  const card = document.getElementById('stat-card-sammel');
+  if (card) card.style.display = sammelCount > 0 ? '' : 'none';
+  animateNum('stat-sammel', sammelCount);
 }
 
 // ── NEUE REKLAMATION ──────────────────────────────────────
@@ -298,7 +308,7 @@ function getNextStep(r) {
 function setFilter(filter, btn) {
   aktuellerFilter = filter;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  btn.classList.add('active');
+  if (btn) btn.classList.add('active');
   const sammelToolbar = document.getElementById('sammel-toolbar');
   if (filter === 'sammelreklamation') {
     sammelToolbar.classList.remove('hidden');
@@ -306,6 +316,14 @@ function setFilter(filter, btn) {
   } else {
     sammelToolbar.classList.add('hidden');
   }
+  renderListe();
+}
+
+function toggleSammelAnzeige() {
+  sammelAusblenden = !sammelAusblenden;
+  const btn = document.getElementById('btn-sammel-toggle');
+  btn.classList.toggle('sammel-toggle-aktiv', sammelAusblenden);
+  btn.title = sammelAusblenden ? 'Sammelreklamationen einblenden' : 'Sammelreklamationen ausblenden';
   renderListe();
 }
 
@@ -329,11 +347,13 @@ function exportSammelreklamation() {
 }
 
 function renderListe() {
+  updateSammelStat();
   const suchtext = (document.getElementById('search-input')?.value || '').toLowerCase();
 
   const gefiltert = alleReklamationen.filter(r => {
     const ns = getNextStep(r);
-    if (aktuellerFilter === 'aktiv'   && r.status === 'erledigt') return false;
+    if (aktuellerFilter !== 'archiv'  && r.status === 'erledigt') return false;
+    if (aktuellerFilter === 'aktiv'   && sammelAusblenden && r.schritt2_typ === 'sammelreklamation') return false;
     if (aktuellerFilter === 'archiv'  && r.status !== 'erledigt') return false;
     if (aktuellerFilter === 's2' && ns?.nr !== 2) return false;
     if (aktuellerFilter === 's3' && ns?.nr !== 3) return false;
@@ -472,13 +492,13 @@ function renderDetail(r) {
               <div class="hinweis-text">${escHtml(h.text)}</div>
               <div class="hinweis-meta">
                 ${escHtml(h.von)} · ${formatDatum(h.am)}
-                <button class="hinweis-edit-btn" onclick="editHinweis(${r.id}, ${idx})" title="Bearbeiten">✏</button>
+                <button class="hinweis-edit-btn" onclick="editHinweis(${r.id}, ${idx})" title="Bearbeiten">✏ Bearbeiten</button>
               </div>
             </div>`).join('')}
       </div>
       <div class="hinweis-add">
         <textarea id="hinweis-input" placeholder="Hinweis hinzufügen..." rows="2" maxlength="500"></textarea>
-        <button onclick="addHinweis(${r.id})">Hinzufügen</button>
+        <button class="btn-action" onclick="addHinweis(${r.id})">Hinzufügen</button>
       </div>
     </div>
     <div class="detail-footer">
@@ -511,7 +531,7 @@ function schritt1(r) {
           </div>
           ${bilderHtml}
           <div class="step-footer">Angelegt von <strong>${escHtml(r.erstellt_von)}</strong> · ${formatDatum(r.erstellt_am)}
-            <button class="btn-edit-step" onclick="openAktionModal(${r.id}, 1)" title="Ändern">✎</button>
+            <button class="btn-edit-step" onclick="openAktionModal(${r.id}, 1)" title="Ändern">✎ Ändern</button>
           </div>
         </div>
       </div>
@@ -527,7 +547,7 @@ function schritt2(r, canAct) {
       ? '<span class="badge-sammel">Sammelreklamation</span>'
       : '<span class="badge-lieferant">An Lieferant gemeldet</span>';
     body = `<div class="step-done-info">${typLabel} · von <strong>${escHtml(r.an_lieferant_von)}</strong> · ${formatDatum(r.an_lieferant_am)}
-        <button class="btn-edit-step" onclick="openAktionModal(${r.id}, 2)" title="Ändern">✎</button></div>`;
+        <button class="btn-edit-step" onclick="openAktionModal(${r.id}, 2)" title="Ändern">✎ Ändern</button></div>`;
   } else {
     body = `<button class="btn-action" onclick="openAktionModal(${r.id}, 2)">Weiterverarbeitung festlegen</button>`;
   }
@@ -550,7 +570,7 @@ function schritt3(r, canAct) {
       ? `<span class="badge-anerkannt">✓ Anerkannt</span>`
       : `<span class="badge-abgelehnt">✗ Abgelehnt</span>`;
     body = `<div class="step-done-info">${badge} · Eingetragen von <strong>${escHtml(r.lieferant_entscheidung_von)}</strong> · ${formatDatum(r.lieferant_entscheidung_am)}
-      <button class="btn-edit-step" onclick="openAktionModal(${r.id}, 3)" title="Ändern">✎</button></div>`;
+      <button class="btn-edit-step" onclick="openAktionModal(${r.id}, 3)" title="Ändern">✎ Ändern</button></div>`;
   } else if (canAct) {
     body = `<button class="btn-action" onclick="openAktionModal(${r.id}, 3)">Entscheidung des Lieferanten eintragen</button>`;
   } else {
@@ -575,7 +595,7 @@ function schritt4(r, canAct) {
       ? `Gutschriftsnr.: <strong>${escHtml(r.lieferant_gutschriftsnummer)}</strong> · `
       : (r.lieferant_entscheidung === 'abgelehnt' ? '<span class="badge-auto">Automatisch erledigt</span> · ' : '');
     body = `<div class="step-done-info">${gs}Eingetragen von <strong>${escHtml(r.lieferant_gutschrift_von)}</strong> · ${formatDatum(r.lieferant_gutschrift_am)}
-      <button class="btn-edit-step" onclick="openAktionModal(${r.id}, 4)" title="Ändern">✎</button></div>`;
+      <button class="btn-edit-step" onclick="openAktionModal(${r.id}, 4)" title="Ändern">✎ Ändern</button></div>`;
   } else if (canAct) {
     const entscheid = r.lieferant_entscheidung === 'abgelehnt'
       ? `<div class="lieferant-hinweis">⚠ Lieferant hat abgelehnt — Gutschriftsnummer ggf. nicht vorhanden.</div>` : '';
@@ -608,7 +628,7 @@ function schritt5(r, canAct) {
       ref = r.kunden_referenznummer ? `${refLabel}: <strong>${escHtml(r.kunden_referenznummer)}</strong> · ` : '';
     }
     body = `<div class="step-done-info">${loesungBadge} · ${ref}Eingetragen von <strong>${escHtml(r.loesung_von)}</strong> · ${formatDatum(r.loesung_am)}
-      <button class="btn-edit-step" onclick="openAktionModal(${r.id}, 5)" title="Ändern">✎</button></div>`;
+      <button class="btn-edit-step" onclick="openAktionModal(${r.id}, 5)" title="Ändern">✎ Ändern</button></div>`;
   } else if (canAct) {
     body = `<button class="btn-action" onclick="openAktionModal(${r.id}, 5)">Kundenlösung eintragen</button>`;
   } else {
@@ -828,8 +848,20 @@ async function submitAktion() {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || res.status);
     }
+    const aktualisiert = await res.json().catch(() => null);
+    if (aktualisiert) {
+      const idx = alleReklamationen.findIndex(x => x.id === aktualisiert.id);
+      if (idx !== -1) alleReklamationen[idx] = aktualisiert;
+    }
     closeAktionModal();
-    toast('Gespeichert', 'success');
+    if (aktionSchritt === 6) {
+      closeDetailModal();
+      const archivBtn = [...document.querySelectorAll('.tab')].find(b => b.getAttribute('onclick')?.includes('archiv'));
+      setFilter('archiv', archivBtn);
+      toast('Reklamation erledigt → Archiv', 'success');
+    } else {
+      toast('Gespeichert', 'success');
+    }
   } catch (e) {
     toast('Fehler: ' + (e.message || 'Unbekannt'), 'error');
   }

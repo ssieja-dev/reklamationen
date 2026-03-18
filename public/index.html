@@ -170,6 +170,10 @@
       <span class="stat-num green" id="stat-erledigt">0</span>
       <span class="stat-label">Erledigt</span>
     </div>
+    <div class="stat-card" id="stat-card-sammel" style="display:none">
+      <span class="stat-num purple" id="stat-sammel">0</span>
+      <span class="stat-label">Sammelrekl.</span>
+    </div>
     <div class="stat-card">
       <span class="stat-num gray" id="stat-gesamt">0</span>
       <span class="stat-label">Gesamt</span>
@@ -188,6 +192,10 @@
         <button class="btn-neu hidden" id="btn-neu" onclick="openNeuModal()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Neue Reklamation
+        </button>
+        <button class="btn-sammel-toggle" id="btn-sammel-toggle" onclick="toggleSammelAnzeige()" title="Sammelreklamationen ein-/ausblenden">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Sammel
         </button>
       </div>
 
