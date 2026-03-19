@@ -340,10 +340,57 @@ async function aktualisiereSammelLieferanten() {
 
 function exportSammelreklamation() {
   const lieferant = document.getElementById('sammel-lieferant-select').value;
-  const url = '/api/export/sammelreklamation' + (lieferant ? `?lieferant=${encodeURIComponent(lieferant)}` : '');
-  const a = document.createElement('a');
-  a.href = url;
-  a.click();
+  const liste = alleReklamationen.filter(r =>
+    r.schritt2_typ === 'sammelreklamation' && r.status !== 'erledigt' &&
+    (!lieferant || (r.lieferantenname || '').toLowerCase() === lieferant.toLowerCase())
+  );
+  if (!liste.length) { toast('Keine Einträge zum Exportieren', 'info'); return; }
+
+  const datum = new Date().toLocaleDateString('de-AT');
+  const titel = lieferant ? `Sammelreklamation – ${lieferant}` : 'Sammelreklamation – Alle Lieferanten';
+  const zeilen = liste.map((r, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${r.reklamationsnummer || ''}</td>
+      <td>${r.artikelname || ''}</td>
+      <td>${r.lieferanten_artikelnummer || ''}</td>
+      <td class="num">${r.menge || ''}</td>
+      <td>${r.reklagrund || ''}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">
+  <title>${titel}</title>
+  <style>
+    @page { size: A4 landscape; margin: 12mm 15mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 10pt; color: #000; }
+    h2 { font-size: 13pt; margin-bottom: 2mm; }
+    .meta { font-size: 9pt; color: #555; margin-bottom: 5mm; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #1e3a5f; color: #fff; padding: 4px 6px; text-align: left; font-size: 9pt; }
+    td { padding: 4px 6px; border-bottom: 1px solid #ddd; font-size: 9pt; vertical-align: top; }
+    tr:nth-child(even) td { background: #f5f7fa; }
+    .num { text-align: right; }
+    th:nth-child(1), td:nth-child(1) { width: 6mm; }
+    th:nth-child(2), td:nth-child(2) { width: 28mm; }
+    th:nth-child(4), td:nth-child(4) { width: 30mm; }
+    th:nth-child(5), td:nth-child(5) { width: 14mm; }
+  </style></head><body>
+  <h2>${titel}</h2>
+  <div class="meta">Datum: ${datum} &nbsp;|&nbsp; Anzahl: ${liste.length}</div>
+  <table>
+    <thead><tr>
+      <th>#</th><th>Rekl.-Nr.</th><th>Artikelname</th>
+      <th>Lief.-Artikelnummer</th><th class="num">Menge</th><th>Reklamationsgrund</th>
+    </tr></thead>
+    <tbody>${zeilen}</tbody>
+  </table>
+  <script>window.onload = () => { window.print(); }<\/script>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
 }
 
 function renderListe() {
@@ -646,14 +693,12 @@ function schritt5(r, canAct) {
 
 function schritt6(r, canAct) {
   const done = !!r.erledigt_am;
-  const cls  = done ? 'done' : canAct ? 'active' : 'pending';
+  const cls  = done ? 'done' : 'active';
   const body = done
     ? `<div class="step-done-info">Erledigt von <strong>${escHtml(r.erledigt_von)}</strong> · ${formatDatum(r.erledigt_am)}
         <button class="btn-rueckgaengig" onclick="erledigtRueckgaengig(${r.id})">Rückgängig</button>
        </div>`
-    : canAct
-      ? `<button class="btn-action btn-erledigt" onclick="openAktionModal(${r.id}, 6)">Als vollständig erledigt markieren</button>`
-      : `<p class="step-pending-text">Vorheriger Schritt ausstehend.</p>`;
+    : `<button class="btn-action btn-erledigt" onclick="openAktionModal(${r.id}, 6)">Als erledigt markieren</button>`;
   return `
     <div class="timeline-step ${cls}">
       <div class="step-marker ${cls}">${done ? '✓' : '6'}</div>
