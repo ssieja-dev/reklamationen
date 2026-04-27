@@ -814,10 +814,10 @@ function openAktionModal(id, schritt) {
       <div class="aktion-field">
         <label>Kundenbilder</label>
         ${vorhandeneBilder ? `<div class="e-bilder-grid" id="e-bilder-grid">${vorhandeneBilder}</div>` : '<div class="e-bilder-grid" id="e-bilder-grid"></div>'}
-        <div class="bilder-dropzone" id="e-bilder-zone" style="margin-top:8px">
+        <div class="bilder-dropzone" id="e-bilder-zone" style="margin-top:8px;cursor:pointer" onclick="document.getElementById('e-bilder-input').click()">
           <input type="file" id="e-bilder-input" multiple accept="image/*" style="display:none" onchange="eBilderHinzufuegen(this.files)" />
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:22px;height:22px;color:var(--text-muted)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          <span>Bilder hinzufügen oder <label for="e-bilder-input" style="text-decoration:underline;cursor:pointer;color:var(--accent)">AUSWÄHLEN</label></span>
+          <span>Bilder hinzufügen oder <strong style="color:var(--accent)">AUSWÄHLEN</strong></span>
         </div>
       </div>`;
   } else if (schritt === 2) {
