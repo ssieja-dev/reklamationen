@@ -9,13 +9,14 @@ process.on('uncaughtException', err => {
   process.stdin.once('data', () => process.exit(1));
 });
 
-const express = require('express');
-const http    = require('http');
+const express    = require('express');
+const http       = require('http');
 const { Server } = require('socket.io');
-const session = require('express-session');
-const fs      = require('fs');
-const path    = require('path');
-const multer  = require('multer');
+const session    = require('express-session');
+const FileStore  = require('session-file-store')(session);
+const fs         = require('fs');
+const path       = require('path');
+const multer     = require('multer');
 
 function validierePortalToken(token) {
   return new Promise((resolve, reject) => {
@@ -107,6 +108,7 @@ app.use(session({
   secret: 'rekla-secret-2024',
   resave: false,
   saveUninitialized: false,
+  store: new FileStore({ path: path.join(__dirname, 'sessions'), ttl: 28800, retries: 1 }),
   cookie: { maxAge: 8 * 60 * 60 * 1000 }
 }));
 
