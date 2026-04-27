@@ -187,7 +187,15 @@ app.get('/api/reklamationen', (req, res) => {
   res.json(sorted);
 });
 
-app.post('/api/reklamationen', upload.array('bilder', 10), (req, res) => {
+app.post('/api/reklamationen', (req, res, next) => {
+  upload.array('bilder', 10)(req, res, err => {
+    if (err) {
+      console.error('[POST /api/reklamationen] Multer-Fehler:', err.message);
+      return res.status(400).json({ error: 'Bild-Upload fehlgeschlagen: ' + err.message });
+    }
+    next();
+  });
+}, (req, res) => {
   const { kundenname, auftragsnummer, auftragsdatum, artikelnummer,
           artikelname, menge, reklagrund, erstellt_von,
           lieferantenname, lieferanten_artikelnummer } = req.body;
@@ -195,50 +203,58 @@ app.post('/api/reklamationen', upload.array('bilder', 10), (req, res) => {
       !artikelname?.trim() || !erstellt_von?.trim()) {
     return res.status(400).json({ error: 'Pflichtfelder fehlen' });
   }
-  const reklamation = {
-    id: db.nextId++,
-    reklamationsnummer: buildReklanummer(auftragsnummer, auftragsdatum),
-    status: 'neu',
-    kundenname: kundenname.trim(),
-    auftragsnummer: auftragsnummer.trim(),
-    auftragsdatum: auftragsdatum.trim(),
-    artikelnummer: (artikelnummer || '').trim(),
-    artikelname: artikelname.trim(),
-    menge: Number(menge) || 1,
-    lieferantenname: (lieferantenname || '').trim(),
-    lieferanten_artikelnummer: (lieferanten_artikelnummer || '').trim(),
-    reklagrund: (reklagrund || '').trim(),
-    bilder: (req.files || []).map(f => f.filename),
-    erstellt_von: erstellt_von.trim(),
-    erstellt_am: new Date().toISOString(),
-    // Schritt 2
-    schritt2_typ: null,
-    an_lieferant_von: null, an_lieferant_am: null,
-    // Schritt 3
-    lieferant_entscheidung: null,
-    lieferant_entscheidung_von: null, lieferant_entscheidung_am: null,
-    // Schritt 4
-    lieferant_gutschriftsnummer: null,
-    lieferant_gutschrift_von: null, lieferant_gutschrift_am: null,
-    // Schritt 5
-    kunden_loesung: null, kunden_referenznummer: null,
-    loesung_von: null, loesung_am: null,
-    // Schritt 6
-    erledigt_von: null, erledigt_am: null,
-    hinweise: []
-  };
-  db.reklamationen.push(reklamation);
-  speichereDB(db);
-  io.emit('reklamation_neu', reklamation);
-  res.json(reklamation);
+  try {
+    const reklamation = {
+      id: db.nextId++,
+      reklamationsnummer: buildReklanummer(auftragsnummer, auftragsdatum),
+      status: 'neu',
+      kundenname: kundenname.trim(),
+      auftragsnummer: auftragsnummer.trim(),
+      auftragsdatum: auftragsdatum.trim(),
+      artikelnummer: (artikelnummer || '').trim(),
+      artikelname: artikelname.trim(),
+      menge: Number(menge) || 1,
+      lieferantenname: (lieferantenname || '').trim(),
+      lieferanten_artikelnummer: (lieferanten_artikelnummer || '').trim(),
+      reklagrund: (reklagrund || '').trim(),
+      bilder: (req.files || []).map(f => f.filename),
+      erstellt_von: erstellt_von.trim(),
+      erstellt_am: new Date().toISOString(),
+      schritt2_typ: null,
+      an_lieferant_von: null, an_lieferant_am: null,
+      lieferant_entscheidung: null,
+      lieferant_entscheidung_von: null, lieferant_entscheidung_am: null,
+      lieferant_gutschriftsnummer: null,
+      lieferant_gutschrift_von: null, lieferant_gutschrift_am: null,
+      kunden_loesung: null, kunden_referenznummer: null,
+      loesung_von: null, loesung_am: null,
+      erledigt_von: null, erledigt_am: null,
+      hinweise: []
+    };
+    db.reklamationen.push(reklamation);
+    speichereDB(db);
+    io.emit('reklamation_neu', reklamation);
+    res.json(reklamation);
+  } catch (e) {
+    console.error('[POST /api/reklamationen] Fehler:', e.message);
+    res.status(500).json({ error: 'Interner Fehler: ' + e.message });
+  }
 });
 
 // Schritt 1: Anlage bearbeiten
-app.patch('/api/reklamationen/:id/anlage', (req, res) => {
+app.patch('/api/reklamationen/:id/anlage', (req, res, next) => {
+  upload.array('bilder', 10)(req, res, err => {
+    if (err) {
+      console.error('[PATCH anlage] Multer-Fehler:', err.message);
+      return res.status(400).json({ error: 'Bild-Upload fehlgeschlagen: ' + err.message });
+    }
+    next();
+  });
+}, (req, res) => {
   const r = db.reklamationen.find(r => r.id === parseInt(req.params.id));
   if (!r) return res.status(404).json({ error: 'Nicht gefunden' });
   const { kundenname, auftragsnummer, auftragsdatum, artikelnummer, artikelname, menge, reklagrund,
-          lieferantenname, lieferanten_artikelnummer } = req.body;
+          lieferantenname, lieferanten_artikelnummer, bilder_loeschen } = req.body;
   if (!kundenname?.trim() || !auftragsnummer?.trim() || !auftragsdatum?.trim() || !artikelname?.trim())
     return res.status(400).json({ error: 'Pflichtfelder fehlen' });
   r.kundenname                = kundenname.trim();
@@ -250,7 +266,18 @@ app.patch('/api/reklamationen/:id/anlage', (req, res) => {
   r.lieferantenname           = (lieferantenname || '').trim();
   r.lieferanten_artikelnummer = (lieferanten_artikelnummer || '').trim();
   r.reklagrund                = (reklagrund || '').trim();
-  r.reklamationsnummer = buildReklanummer(r.auftragsnummer, r.auftragsdatum);
+  r.reklamationsnummer        = buildReklanummer(r.auftragsnummer, r.auftragsdatum);
+  // Bilder löschen
+  const zuLoeschen = bilder_loeschen ? JSON.parse(bilder_loeschen) : [];
+  if (zuLoeschen.length > 0) {
+    r.bilder = r.bilder.filter(b => !zuLoeschen.includes(b));
+    zuLoeschen.forEach(b => {
+      const p = path.join(UPLOADS_DIR, b);
+      if (fs.existsSync(p)) fs.unlink(p, () => {});
+    });
+  }
+  // Neue Bilder anhängen
+  if (req.files?.length > 0) r.bilder.push(...req.files.map(f => f.filename));
   speichereDB(db);
   io.emit('reklamation_update', r);
   res.json(r);

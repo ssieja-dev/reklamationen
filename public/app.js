@@ -10,6 +10,8 @@ let aktionReklaId = null;
 let aktionSchritt = null;
 let neuBilder = [];
 let sammelAusblenden = false;
+let eBilderNeu = [];       // neue Dateien im Edit-Modal
+let eBilderLoeschen = [];  // Dateinamen die gelöscht werden sollen
 
 // ── INITIALISIERUNG ───────────────────────────────────────
 function initBilderDropzone() {
@@ -288,11 +290,14 @@ async function submitNeuReklamation() {
 
   try {
     const res = await fetch('/api/reklamationen', { method: 'POST', body: fd });
-    if (!res.ok) throw new Error();
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'HTTP ' + res.status);
+    }
     closeNeuModal();
     toast('Reklamation angelegt', 'success');
-  } catch {
-    toast('Fehler beim Anlegen', 'error');
+  } catch (e) {
+    toast('Fehler: ' + (e.message || 'Unbekannt'), 'error');
   }
 }
 
@@ -735,8 +740,46 @@ function schritt6(r, canAct) {
     </div>`;
 }
 
+// ── EDIT-MODAL BILDER ─────────────────────────────────────
+function eBilderHinzufuegen(files) {
+  eBilderNeu.push(...Array.from(files));
+  const grid = document.getElementById('e-bilder-grid');
+  if (!grid) return;
+  eBilderNeu.forEach((f, i) => {
+    const id = 'e-bild-neu-' + i;
+    if (document.getElementById(id)) return;
+    const url = URL.createObjectURL(f);
+    const div = document.createElement('div');
+    div.className = 'e-bild-item';
+    div.id = id;
+    div.innerHTML = `<img src="${url}" class="bild-thumb" /><button type="button" class="e-bild-del" onclick="eBildNeuEntfernen(${i})" title="Entfernen">×</button>`;
+    grid.appendChild(div);
+  });
+  document.getElementById('e-bilder-input').value = '';
+}
+
+function eBildNeuEntfernen(i) {
+  eBilderNeu.splice(i, 1);
+  const el = document.getElementById('e-bild-neu-' + i);
+  if (el) el.remove();
+  // re-index remaining
+  document.querySelectorAll('[id^="e-bild-neu-"]').forEach((el, idx) => {
+    el.id = 'e-bild-neu-' + idx;
+    const btn = el.querySelector('button');
+    if (btn) btn.setAttribute('onclick', `eBildNeuEntfernen(${idx})`);
+  });
+}
+
+function eBildLoeschen(i, filename) {
+  eBilderLoeschen.push(filename);
+  const el = document.getElementById('e-bild-item-' + i);
+  if (el) el.remove();
+}
+
 // ── AKTION MODAL ──────────────────────────────────────────
 function openAktionModal(id, schritt) {
+  eBilderNeu = [];
+  eBilderLoeschen = [];
   aktionReklaId = id;
   aktionSchritt = schritt;
   const r = alleReklamationen.find(r => r.id === id);
@@ -753,6 +796,11 @@ function openAktionModal(id, schritt) {
 
   let inhalt = '';
   if (schritt === 1) {
+    const vorhandeneBilder = (r?.bilder || []).map((b, i) => `
+      <div class="e-bild-item" id="e-bild-item-${i}">
+        <img src="/uploads/${escHtml(b)}" class="bild-thumb" />
+        <button type="button" class="e-bild-del" onclick="eBildLoeschen(${i},'${escHtml(b)}')" title="Bild entfernen">×</button>
+      </div>`).join('');
     inhalt = `
       <div class="aktion-field"><label>Kundenname *</label><input type="text" id="e-kundenname" maxlength="100" value="${escHtml(r?.kundenname || '')}" /></div>
       <div class="aktion-field"><label>Auftragsnummer *</label><input type="text" id="e-auftragsnummer" maxlength="50" value="${escHtml(r?.auftragsnummer || '')}" /></div>
@@ -762,7 +810,16 @@ function openAktionModal(id, schritt) {
       <div class="aktion-field"><label>Menge</label><input type="number" id="e-menge" min="1" max="99999" value="${r?.menge || 1}" /></div>
       <div class="aktion-field"><label>Lieferantenname</label><input type="text" id="e-lieferantenname" maxlength="100" value="${escHtml(r?.lieferantenname || '')}" /></div>
       <div class="aktion-field"><label>Lieferanten-Artikelnummer</label><input type="text" id="e-lieferanten-artikelnummer" maxlength="50" value="${escHtml(r?.lieferanten_artikelnummer || '')}" /></div>
-      <div class="aktion-field"><label>Reklamationsgrund</label><textarea id="e-reklagrund" rows="3" maxlength="500">${escHtml(r?.reklagrund || '')}</textarea></div>`;
+      <div class="aktion-field"><label>Reklamationsgrund</label><textarea id="e-reklagrund" rows="3" maxlength="500">${escHtml(r?.reklagrund || '')}</textarea></div>
+      <div class="aktion-field">
+        <label>Kundenbilder</label>
+        ${vorhandeneBilder ? `<div class="e-bilder-grid" id="e-bilder-grid">${vorhandeneBilder}</div>` : '<div class="e-bilder-grid" id="e-bilder-grid"></div>'}
+        <div class="bilder-dropzone" id="e-bilder-zone" style="margin-top:8px">
+          <input type="file" id="e-bilder-input" multiple accept="image/*" style="display:none" onchange="eBilderHinzufuegen(this.files)" />
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:22px;height:22px;color:var(--text-muted)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span>Bilder hinzufügen oder <label for="e-bilder-input" style="text-decoration:underline;cursor:pointer;color:var(--accent)">AUSWÄHLEN</label></span>
+        </div>
+      </div>`;
   } else if (schritt === 2) {
     inhalt = `
       <p>Wie soll diese Reklamation weiterverarbeitet werden?</p>
@@ -876,14 +933,19 @@ async function submitAktion() {
     if (!auftragsdatum)  { shake(document.getElementById('e-auftragsdatum'));  return; }
     if (!artikelname)    { shake(document.getElementById('e-artikelname'));    return; }
     url  = `/api/reklamationen/${aktionReklaId}/anlage`;
-    body = {
-      kundenname, auftragsnummer, auftragsdatum, artikelname,
-      artikelnummer:           document.getElementById('e-artikelnummer')?.value.trim() || '',
-      menge:                   Number(document.getElementById('e-menge')?.value) || 1,
-      lieferantenname:         document.getElementById('e-lieferantenname')?.value.trim() || '',
-      lieferanten_artikelnummer: document.getElementById('e-lieferanten-artikelnummer')?.value.trim() || '',
-      reklagrund:              document.getElementById('e-reklagrund')?.value.trim() || '',
-    };
+    const fd1 = new FormData();
+    fd1.append('kundenname', kundenname);
+    fd1.append('auftragsnummer', auftragsnummer);
+    fd1.append('auftragsdatum', auftragsdatum);
+    fd1.append('artikelname', artikelname);
+    fd1.append('artikelnummer', document.getElementById('e-artikelnummer')?.value.trim() || '');
+    fd1.append('menge', Number(document.getElementById('e-menge')?.value) || 1);
+    fd1.append('lieferantenname', document.getElementById('e-lieferantenname')?.value.trim() || '');
+    fd1.append('lieferanten_artikelnummer', document.getElementById('e-lieferanten-artikelnummer')?.value.trim() || '');
+    fd1.append('reklagrund', document.getElementById('e-reklagrund')?.value.trim() || '');
+    fd1.append('bilder_loeschen', JSON.stringify(eBilderLoeschen));
+    for (const f of eBilderNeu) fd1.append('bilder', f);
+    body = fd1;
   } else if (aktionSchritt === 2) {
     const typ = document.querySelector('input[name="schritt2typ"]:checked')?.value;
     if (!typ) { toast('Bitte eine Option wählen.', 'error'); return; }
@@ -910,11 +972,10 @@ async function submitAktion() {
   }
 
   try {
-    const res = await fetch(url, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const fetchOpts = aktionSchritt === 1
+      ? { method: 'PATCH', body }
+      : { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+    const res = await fetch(url, fetchOpts);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || res.status);
