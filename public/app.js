@@ -89,6 +89,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const daten = await res.json();
     alleReklamationen = daten;
     renderListe();
+    aktualisiereAktivLieferanten();
     ladeStatistik();
     updateSammelStat();
   } catch {
@@ -121,7 +122,7 @@ async function setUser() {
     const res = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ passwort })
+      body: JSON.stringify({ passwort, name })
     });
     if (!res.ok) {
       shake(document.getElementById('user-passwort-input'));
@@ -265,6 +266,7 @@ async function submitNeuReklamation() {
   const artikelname    = document.getElementById('n-artikelname').value.trim();
   const reklagrund     = document.getElementById('n-reklagrund').value.trim();
 
+  if (!userName)       { toast('Bitte erst einloggen', 'error'); return; }
   if (!kundenname)     { shake(document.getElementById('n-kundenname')); return; }
   if (!auftragsnummer) { shake(document.getElementById('n-auftragsnummer')); return; }
   if (!auftragsdatum)  { shake(document.getElementById('n-auftragsdatum')); return; }
@@ -316,6 +318,11 @@ function setFilter(filter, btn) {
   } else {
     sammelToolbar.classList.add('hidden');
   }
+  if (filter === 'aktiv') {
+    aktualisiereAktivLieferanten();
+  } else {
+    document.getElementById('aktiv-toolbar').classList.add('hidden');
+  }
   renderListe();
 }
 
@@ -336,6 +343,21 @@ async function aktualisiereSammelLieferanten() {
     sel.innerHTML = '<option value="">Alle Lieferanten</option>' +
       liste.map(l => `<option value="${escHtml(l)}" ${l === current ? 'selected' : ''}>${escHtml(l)}</option>`).join('');
   } catch {}
+}
+
+function aktualisiereAktivLieferanten() {
+  const aktive = alleReklamationen.filter(r => r.status !== 'erledigt');
+  const lieferanten = [...new Set(aktive.map(r => r.lieferantenname).filter(Boolean))].sort();
+  const toolbar = document.getElementById('aktiv-toolbar');
+  if (lieferanten.length === 0) {
+    toolbar.classList.add('hidden');
+    return;
+  }
+  const sel = document.getElementById('aktiv-lieferant-select');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Alle Lieferanten</option>' +
+    lieferanten.map(l => `<option value="${escHtml(l)}" ${l === current ? 'selected' : ''}>${escHtml(l)}</option>`).join('');
+  toolbar.classList.remove('hidden');
 }
 
 function exportSammelreklamation() {
@@ -401,6 +423,10 @@ function renderListe() {
     const ns = getNextStep(r);
     if (aktuellerFilter !== 'archiv'  && r.status === 'erledigt') return false;
     if (aktuellerFilter === 'aktiv'   && sammelAusblenden && r.schritt2_typ === 'sammelreklamation') return false;
+    if (aktuellerFilter === 'aktiv') {
+      const lieferantFilter = document.getElementById('aktiv-lieferant-select')?.value;
+      if (lieferantFilter && r.lieferantenname !== lieferantFilter) return false;
+    }
     if (aktuellerFilter === 'archiv'  && r.status !== 'erledigt') return false;
     if (aktuellerFilter === 's2' && ns?.nr !== 2) return false;
     if (aktuellerFilter === 's3' && ns?.nr !== 3) return false;

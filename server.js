@@ -132,10 +132,11 @@ app.use('/uploads', express.static(UPLOADS_DIR));
 
 // ── Login ─────────────────────────────────────────────────
 app.post('/api/login', (req, res) => {
-  const { passwort } = req.body;
+  const { passwort, name } = req.body;
   const config = ladeConfig();
   if (passwort === config.passwort) {
     req.session.angemeldet = true;
+    if (name?.trim()) req.session.userName = name.trim();
     res.json({ ok: true });
   } else {
     res.status(401).json({ error: 'Falsches Passwort' });
