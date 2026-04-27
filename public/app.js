@@ -741,6 +741,19 @@ function schritt6(r, canAct) {
 }
 
 // ── EDIT-MODAL BILDER ─────────────────────────────────────
+function initEditDropzone() {
+  const zone  = document.getElementById('e-bilder-zone');
+  const input = document.getElementById('e-bilder-input');
+  if (!zone || !input) return;
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    eBilderHinzufuegen([...e.dataTransfer.files].filter(f => f.type.startsWith('image/')));
+  });
+}
+
 function eBilderHinzufuegen(files) {
   eBilderNeu.push(...Array.from(files));
   const grid = document.getElementById('e-bilder-grid');
@@ -880,6 +893,7 @@ function openAktionModal(id, schritt) {
   }
 
   document.getElementById('aktion-inhalt').innerHTML = inhalt;
+  if (schritt === 1) initEditDropzone();
 
   // Vorausfüllen bei Bearbeitung bereits erledigter Schritte
   if (schritt === 2) {
