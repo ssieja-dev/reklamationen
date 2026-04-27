@@ -28,8 +28,9 @@ function initBilderDropzone() {
   input.addEventListener('change', () => { addNeuBilder([...input.files]); input.value = ''; });
 }
 
-function addNeuBilder(files) {
-  neuBilder.push(...files);
+async function addNeuBilder(files) {
+  const komprimiert = await komprimiereDateien(files);
+  neuBilder.push(...komprimiert);
   renderNeuBilderVorschau();
 }
 
@@ -740,6 +741,47 @@ function schritt6(r, canAct) {
     </div>`;
 }
 
+// ── BILD-KOMPRIMIERUNG ────────────────────────────────────
+function komprimieresBild(file, maxBytes = 900 * 1024) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.naturalWidth, h = img.naturalHeight;
+      // Maximal 2000px in der längsten Seite
+      const maxDim = 2000;
+      if (w > maxDim || h > maxDim) {
+        if (w >= h) { h = Math.round(h * maxDim / w); w = maxDim; }
+        else        { w = Math.round(w * maxDim / h); h = maxDim; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      // Qualität schrittweise reduzieren bis unter maxBytes
+      let quality = 0.85;
+      const tryEncode = () => {
+        canvas.toBlob(blob => {
+          if (!blob) { resolve(file); return; }
+          if (blob.size <= maxBytes || quality <= 0.3) {
+            resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+          } else {
+            quality -= 0.1;
+            tryEncode();
+          }
+        }, 'image/jpeg', quality);
+      };
+      tryEncode();
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
+async function komprimiereDateien(files) {
+  return Promise.all(Array.from(files).filter(f => f.type.startsWith('image/')).map(f => komprimieresBild(f)));
+}
+
 // ── EDIT-MODAL BILDER ─────────────────────────────────────
 function initEditDropzone() {
   const zone  = document.getElementById('e-bilder-zone');
@@ -754,8 +796,9 @@ function initEditDropzone() {
   });
 }
 
-function eBilderHinzufuegen(files) {
-  eBilderNeu.push(...Array.from(files));
+async function eBilderHinzufuegen(files) {
+  const komprimiert = await komprimiereDateien(files);
+  eBilderNeu.push(...komprimiert);
   const grid = document.getElementById('e-bilder-grid');
   if (!grid) return;
   eBilderNeu.forEach((f, i) => {
