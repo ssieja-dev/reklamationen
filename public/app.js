@@ -114,6 +114,31 @@ function zeigeLoginModal() {
   document.getElementById('user-modal').classList.remove('hidden');
 }
 
+function zeigSessionBanner() {
+  document.getElementById('session-banner').classList.remove('hidden');
+}
+
+function verbergSessionBanner() {
+  document.getElementById('session-banner').classList.add('hidden');
+}
+
+async function pruefeSession() {
+  try {
+    const r = await fetch('/api/me');
+    if (r.status === 401) {
+      zeigSessionBanner();
+      return false;
+    }
+    verbergSessionBanner();
+    return true;
+  } catch {
+    return true; // Netzwerkfehler — nicht fälschlicherweise Banner zeigen
+  }
+}
+
+// Heartbeat: Session alle 90 Sekunden prüfen
+setInterval(pruefeSession, 90_000);
+
 // ── USER / ROLLE ──────────────────────────────────────────
 async function setUser() {
   const passwort = document.getElementById('user-passwort-input').value;
@@ -154,6 +179,7 @@ async function setUser() {
 
 function closeUserModal() {
   document.getElementById('user-modal').classList.add('hidden');
+  verbergSessionBanner();
 }
 
 async function logout() {
@@ -246,8 +272,9 @@ function updateSammelStat() {
 }
 
 // ── NEUE REKLAMATION ──────────────────────────────────────
-function openNeuModal() {
-  if (!userName) { document.getElementById('user-modal').classList.remove('hidden'); return; }
+async function openNeuModal() {
+  const ok = await pruefeSession();
+  if (!ok || !userName) { zeigeLoginModal(); return; }
   document.getElementById('n-auftragsdatum').value = new Date().toISOString().slice(0, 10);
   document.getElementById('neu-modal').classList.remove('hidden');
 }
@@ -403,9 +430,18 @@ function exportSammelreklamation() {
     th:nth-child(2), td:nth-child(2) { width: 28mm; }
     th:nth-child(4), td:nth-child(4) { width: 30mm; }
     th:nth-child(5), td:nth-child(5) { width: 14mm; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5mm; border-bottom: 2px solid #1e3a5f; padding-bottom: 4mm; }
+    .header-text h2 { margin: 0 0 1mm; }
+    .header-text .meta { margin: 0; }
+    .header img { height: 44px; max-width: 160px; object-fit: contain; }
   </style></head><body>
-  <h2>${titel}</h2>
-  <div class="meta">Datum: ${datum} &nbsp;|&nbsp; Anzahl: ${liste.length}</div>
+  <div class="header">
+    <div class="header-text">
+      <h2>${titel}</h2>
+      <div class="meta">Datum: ${datum} &nbsp;|&nbsp; Anzahl: ${liste.length}</div>
+    </div>
+    <img src="${location.origin}/logo.png" alt="PITUPITA" />
+  </div>
   <table>
     <thead><tr>
       <th>#</th><th>Rekl.-Nr.</th><th>Artikelname</th>
@@ -1096,7 +1132,12 @@ async function saveHinweis(rekId, idx) {
 }
 
 async function erledigtRueckgaengig(id) {
-  if (!confirm('Erledigung wirklich rückgängig machen?')) return;
+  const ok = await pitupitaConfirm({
+    title: 'Erledigung rückgängig?',
+    message: 'Die Reklamation wird wieder als offen markiert.',
+    confirmText: 'Rückgängig',
+  });
+  if (!ok) return;
   try {
     const res = await fetch(`/api/reklamationen/${id}/erledigt-rueckgaengig`, { method: 'PATCH' });
     if (!res.ok) throw new Error();
@@ -1132,7 +1173,13 @@ function exportCSV() {
 // ── LÖSCHEN ───────────────────────────────────────────────
 async function loescheReklamation(id) {
   const r = alleReklamationen.find(r => r.id === id);
-  if (!confirm(`Reklamation ${r?.reklamationsnummer} wirklich löschen?`)) return;
+  const ok = await pitupitaConfirm({
+    title: `Reklamation ${r?.reklamationsnummer || ''} löschen?`,
+    message: 'Diese Reklamation wird unwiderruflich entfernt — inklusive aller Bilder und Notizen.',
+    confirmText: 'Löschen',
+    danger: true,
+  });
+  if (!ok) return;
   try {
     const res = await fetch(`/api/reklamationen/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error();
@@ -1234,3 +1281,135 @@ shakeStyle.textContent = `@keyframes shake {
   0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)}
 }`;
 document.head.appendChild(shakeStyle);
+
+// ── PDF / Druckformular ───────────────────────────────────
+async function druckeReklamation() {
+  const r = alleReklamationen.find(x => x.id === detailOpenId);
+  if (!r) return;
+
+  let reklagrundEN = '';
+  try {
+    const res = await fetch(
+      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(r.reklagrund || '')}&langpair=de|en`
+    );
+    const data = await res.json();
+    reklagrundEN = data?.responseData?.translatedText || '';
+  } catch (_) { reklagrundEN = ''; }
+
+  const fd   = s => escHtml(s || '–');
+  const fdat = iso => {
+    if (!iso) return '–';
+    return new Date(iso).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });
+  };
+  const fdatStr = s => {
+    if (!s) return '–';
+    const p = s.split('-');
+    return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : s;
+  };
+
+  const statusDE = {
+    neu: 'Neu', an_lieferant: 'An Lieferant', sammelreklamation: 'Sammelreklamation',
+    lieferant_entscheidung: r.lieferant_entscheidung === 'anerkannt' ? 'Anerkannt' : 'Abgelehnt',
+    lieferant_gutschrift: r.lieferant_entscheidung === 'anerkannt' ? 'Anerkannt' : 'Abgelehnt',
+    kundenloesung: 'Kundenlösung', erledigt: 'Erledigt'
+  };
+  const statusEN = {
+    neu: 'New', an_lieferant: 'Sent to Supplier', sammelreklamation: 'Collective Complaint',
+    lieferant_entscheidung: r.lieferant_entscheidung === 'anerkannt' ? 'Accepted' : 'Rejected',
+    lieferant_gutschrift: r.lieferant_entscheidung === 'anerkannt' ? 'Accepted' : 'Rejected',
+    kundenloesung: 'Customer Solution', erledigt: 'Completed'
+  };
+  const stDE = statusDE[r.status] || r.status;
+  const stEN = statusEN[r.status] || r.status;
+
+  const bilder = (r.bilder || []).map(b =>
+    `<img src="/uploads/${escHtml(b)}" onerror="this.style.display='none'" />`
+  ).join('');
+
+  const entscheidungDE = r.lieferant_entscheidung === 'anerkannt' ? 'Anerkannt' : r.lieferant_entscheidung === 'abgelehnt' ? 'Abgelehnt' : '–';
+  const entscheidungEN = r.lieferant_entscheidung === 'anerkannt' ? 'Accepted' : r.lieferant_entscheidung === 'abgelehnt' ? 'Rejected' : '–';
+
+  const html = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
+<title>Reklamation ${escHtml(r.reklamationsnummer)}</title>
+<style>
+  @page { size: A4; margin: 15mm 18mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; color: #1a1a1a; background: #fff; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1a1a2e; padding-bottom: 12px; margin-bottom: 18px; }
+  .header-left .subtitle { font-size: 9pt; color: #555; margin-top: 2px; }
+  .header-right { text-align: right; }
+  .rekla-nr { font-size: 18pt; font-weight: 800; color: #e53e3e; letter-spacing: .03em; margin: 6px 0 4px; }
+  .rekla-date { font-size: 8.5pt; color: #666; margin-top: 3px; }
+  .status-pill { display: inline-block; margin-top: 6px; padding: 3px 12px; border-radius: 99px; font-size: 8.5pt; font-weight: 700; background: #e8f0fe; color: #1a56db; border: 1px solid #93c5fd; }
+  .section { margin-bottom: 18px; }
+  .section-title { font-size: 8.5pt; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: #fff; background: #1a1a2e; padding: 5px 10px; margin-bottom: 10px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+  .row.three { grid-template-columns: 1fr 1fr 1fr; }
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: 7.5pt; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+  .field .val { font-size: 10.5pt; font-weight: 600; color: #1a1a1a; border-bottom: 1px solid #ddd; padding-bottom: 3px; min-height: 20px; }
+  .field .val.grund { white-space: pre-wrap; border: 1px solid #ddd; padding: 8px 10px; background: #fafafa; font-weight: 400; line-height: 1.5; min-height: 52px; }
+  .bilder-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .bilder-grid img { width: 200px; height: 150px; object-fit: cover; border: 1px solid #ccc; border-radius: 4px; }
+  .footer { margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; display: flex; justify-content: space-between; font-size: 8pt; color: #888; }
+</style></head><body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="subtitle" style="margin-bottom:4px;font-size:9pt;color:#555;">Reklamationsformular &nbsp;/&nbsp; Complaint Form</div>
+    <div class="rekla-nr">${fd(r.reklamationsnummer)}</div>
+    <div class="rekla-date">Erstellt / Created: ${fdat(r.erstellt_am)} &nbsp;·&nbsp; ${fd(r.erstellt_von)}</div>
+    <div class="status-pill">${stDE} / ${stEN}</div>
+  </div>
+  <div class="header-right">
+    <img src="${location.origin}/logo.png" alt="PITUPITA" style="height:54px;max-width:180px;object-fit:contain;" />
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Kundendaten &nbsp;/&nbsp; Customer Information</div>
+  <div class="row three">
+    <div class="field"><label>Kunde / Customer</label><div class="val">${fd(r.kundenname)}</div></div>
+    <div class="field"><label>Auftragsnr. / Order No.</label><div class="val">${fd(r.auftragsnummer)}</div></div>
+    <div class="field"><label>Auftragsdatum / Order Date</label><div class="val">${fdatStr(r.auftragsdatum)}</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Artikelinformationen &nbsp;/&nbsp; Article Information</div>
+  <div class="row">
+    <div class="field"><label>Artikel / Article Name</label><div class="val">${fd(r.artikelname)}</div></div>
+    <div class="field"><label>Artikelnr. / Article No.</label><div class="val">${fd(r.artikelnummer)}</div></div>
+  </div>
+  <div class="row three">
+    <div class="field"><label>Menge / Quantity</label><div class="val">${fd(r.menge)}</div></div>
+    <div class="field"><label>Lieferant / Supplier</label><div class="val">${fd(r.lieferantenname)}</div></div>
+    <div class="field"><label>Lief.-Artikelnr. / Supplier Art. No.</label><div class="val">${fd(r.lieferanten_artikelnummer)}</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Reklamationsgrund &nbsp;/&nbsp; Reason for Complaint</div>
+  <div class="row">
+    <div class="field"><label>Deutsch / German</label><div class="val grund">${fd(r.reklagrund)}</div></div>
+    <div class="field"><label>Englisch / English</label><div class="val grund" style="min-height:48px;">${escHtml(reklagrundEN)}</div></div>
+  </div>
+</div>
+
+${bilder ? `<div class="section">
+  <div class="section-title">Fotos &nbsp;/&nbsp; Photos</div>
+  <div class="bilder-grid">${bilder}</div>
+</div>` : ''}
+
+<div class="footer">
+  <span>PITUPITA &nbsp;·&nbsp; Reklamation ${fd(r.reklamationsnummer)}</span>
+  <span>Gedruckt / Printed: ${new Date().toLocaleDateString('de-DE')}</span>
+</div>
+
+</body></html>`;
+
+  const win = window.open('', '_blank', 'width=900,height=700');
+  win.document.write(html);
+  win.document.close();
+  win.addEventListener('load', () => win.print());
+}
