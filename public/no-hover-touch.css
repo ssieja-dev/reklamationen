@@ -1,0 +1,22 @@
+/* Touch-Geräte: Hover-Effekte deaktivieren (verhindert "hängenbleiben" nach Tap) */
+@media (hover: none) {
+  a:hover, button:hover,
+  [class*="btn"]:hover,
+  [class*="item"]:hover,
+  [class*="row"]:hover,
+  [class*="card"]:hover,
+  [class*="tab"]:hover,
+  tbody tr:hover,
+  .kat-btn:hover,
+  .stamm-row:hover {
+    background-color: unset !important;
+    background: unset !important;
+    color: unset !important;
+    border-color: unset !important;
+    opacity: unset !important;
+    filter: unset !important;
+    box-shadow: unset !important;
+  }
+  /* Tap-Highlight entfernen */
+  * { -webkit-tap-highlight-color: transparent; }
+}
