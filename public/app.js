@@ -55,7 +55,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   const backBtn = document.getElementById('portal-back-btn');
   if (backBtn) {
     fetch('/api/config').then(r => r.json()).then(cfg => {
-      backBtn.href = `http://${window.location.hostname}:${cfg.portalPort}`;
+      backBtn.href = window.location.protocol === 'https:'
+        ? `https://${window.location.hostname}/`
+        : `http://${window.location.hostname}:${cfg.portalPort}`;
     });
   }
 
@@ -89,6 +91,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     document.getElementById('btn-neu').classList.remove('hidden');
     document.getElementById('btn-export').classList.remove('hidden');
+    const hBtnNeuInit = document.getElementById('h-btn-neu');
+    if (hBtnNeuInit) hBtnNeuInit.classList.remove('hidden');
+    const hBtnExportInit = document.getElementById('h-btn-export');
+    if (hBtnExportInit) hBtnExportInit.classList.remove('hidden');
     const daten = await res.json();
     alleReklamationen = daten;
     renderListe();
@@ -172,7 +178,9 @@ async function setUser() {
   updateUserDisplay();
   document.getElementById('btn-neu').classList.remove('hidden');
   document.getElementById('btn-export').classList.remove('hidden');
-  document.getElementById('btn-logout').classList.remove('hidden');
+  document.getElementById('btn-logout')?.classList.remove('hidden');
+  const hBtnNeu = document.getElementById('h-btn-neu');
+  if (hBtnNeu) hBtnNeu.classList.remove('hidden');
   ladeReklamationen();
   ladeStatistik();
 }
@@ -186,7 +194,7 @@ async function logout() {
   try { await fetch('/api/logout', { method: 'POST' }); } catch {}
   document.getElementById('btn-neu').classList.add('hidden');
   document.getElementById('btn-export').classList.add('hidden');
-  document.getElementById('btn-logout').classList.add('hidden');
+  document.getElementById('btn-logout')?.classList.add('hidden');
   document.getElementById('user-passwort-input').value = '';
   alleReklamationen = [];
   renderListe();
@@ -995,7 +1003,9 @@ function openAktionModal(id, schritt) {
     if (inp && r.kunden_referenznummer) inp.value = r.kunden_referenznummer;
   }
 
-  document.getElementById('aktion-modal').classList.remove('hidden');
+  const aktionModal = document.getElementById('aktion-modal');
+  aktionModal.classList.remove('hidden');
+  aktionModal.scrollTop = 0;
 }
 
 function toggleLoesungRef() {
@@ -1283,18 +1293,29 @@ shakeStyle.textContent = `@keyframes shake {
 document.head.appendChild(shakeStyle);
 
 // ── PDF / Druckformular ───────────────────────────────────
-async function druckeReklamation() {
+function openPdfSprachwahl() {
+  document.getElementById('pdf-sprach-modal').classList.remove('hidden');
+}
+
+function closePdfSprachwahl() {
+  document.getElementById('pdf-sprach-modal').classList.add('hidden');
+}
+
+async function druckeReklamation(lang) {
+  closePdfSprachwahl();
   const r = alleReklamationen.find(x => x.id === detailOpenId);
   if (!r) return;
 
-  let reklagrundEN = '';
+  const spracheLabel = { en: 'Englisch / English', pl: 'Polnisch / Polski' };
+
+  let reklagrundUebersetzt = '';
   try {
     const res = await fetch(
-      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(r.reklagrund || '')}&langpair=de|en`
+      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(r.reklagrund || '')}&langpair=de|${lang}`
     );
     const data = await res.json();
-    reklagrundEN = data?.responseData?.translatedText || '';
-  } catch (_) { reklagrundEN = ''; }
+    reklagrundUebersetzt = data?.responseData?.translatedText || '';
+  } catch (_) { reklagrundUebersetzt = ''; }
 
   const fd   = s => escHtml(s || '–');
   const fdat = iso => {
@@ -1319,15 +1340,35 @@ async function druckeReklamation() {
     lieferant_gutschrift: r.lieferant_entscheidung === 'anerkannt' ? 'Accepted' : 'Rejected',
     kundenloesung: 'Customer Solution', erledigt: 'Completed'
   };
+  const statusPL = {
+    neu: 'Nowa', an_lieferant: 'Wysłana do dostawcy', sammelreklamation: 'Reklamacja zbiorcza',
+    lieferant_entscheidung: r.lieferant_entscheidung === 'anerkannt' ? 'Uznana' : 'Odrzucona',
+    lieferant_gutschrift: r.lieferant_entscheidung === 'anerkannt' ? 'Uznana' : 'Odrzucona',
+    kundenloesung: 'Rozwiązanie dla klienta', erledigt: 'Zakończona'
+  };
+  const statusMap = lang === 'pl' ? statusPL : statusEN;
   const stDE = statusDE[r.status] || r.status;
-  const stEN = statusEN[r.status] || r.status;
+  const stX  = statusMap[r.status] || r.status;
+
+  const L = {
+    en: {
+      customerInfo: 'Customer Information', customer: 'Customer', orderNo: 'Order No.', orderDate: 'Order Date',
+      articleInfo: 'Article Information', articleName: 'Article Name', articleNo: 'Article No.',
+      quantity: 'Quantity', supplier: 'Supplier', supplierArtNo: 'Supplier Art. No.',
+      reasonComplaint: 'Reason for Complaint', photos: 'Photos', formTitle: 'Complaint Form'
+    },
+    pl: {
+      customerInfo: 'Informacje o kliencie', customer: 'Klient', orderNo: 'Nr zamówienia', orderDate: 'Data zamówienia',
+      articleInfo: 'Informacje o artykule', articleName: 'Nazwa artykułu', articleNo: 'Nr artykułu',
+      quantity: 'Ilość', supplier: 'Dostawca', supplierArtNo: 'Nr art. dostawcy',
+      reasonComplaint: 'Powód reklamacji', photos: 'Zdjęcia', formTitle: 'Formularz reklamacyjny'
+    }
+  };
+  const t = L[lang] || L.en;
 
   const bilder = (r.bilder || []).map(b =>
     `<img src="/uploads/${escHtml(b)}" onerror="this.style.display='none'" />`
   ).join('');
-
-  const entscheidungDE = r.lieferant_entscheidung === 'anerkannt' ? 'Anerkannt' : r.lieferant_entscheidung === 'abgelehnt' ? 'Abgelehnt' : '–';
-  const entscheidungEN = r.lieferant_entscheidung === 'anerkannt' ? 'Accepted' : r.lieferant_entscheidung === 'abgelehnt' ? 'Rejected' : '–';
 
   const html = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
 <title>Reklamation ${escHtml(r.reklamationsnummer)}</title>
@@ -1356,10 +1397,10 @@ async function druckeReklamation() {
 
 <div class="header">
   <div class="header-left">
-    <div class="subtitle" style="margin-bottom:4px;font-size:9pt;color:#555;">Reklamationsformular &nbsp;/&nbsp; Complaint Form</div>
+    <div class="subtitle" style="margin-bottom:4px;font-size:9pt;color:#555;">Reklamationsformular &nbsp;/&nbsp; ${escHtml(t.formTitle)}</div>
     <div class="rekla-nr">${fd(r.reklamationsnummer)}</div>
     <div class="rekla-date">Erstellt / Created: ${fdat(r.erstellt_am)} &nbsp;·&nbsp; ${fd(r.erstellt_von)}</div>
-    <div class="status-pill">${stDE} / ${stEN}</div>
+    <div class="status-pill">${stDE} / ${stX}</div>
   </div>
   <div class="header-right">
     <img src="${location.origin}/logo.png" alt="PITUPITA" style="height:54px;max-width:180px;object-fit:contain;" />
@@ -1367,37 +1408,37 @@ async function druckeReklamation() {
 </div>
 
 <div class="section">
-  <div class="section-title">Kundendaten &nbsp;/&nbsp; Customer Information</div>
+  <div class="section-title">Kundendaten &nbsp;/&nbsp; ${escHtml(t.customerInfo)}</div>
   <div class="row three">
-    <div class="field"><label>Kunde / Customer</label><div class="val">${fd(r.kundenname)}</div></div>
-    <div class="field"><label>Auftragsnr. / Order No.</label><div class="val">${fd(r.auftragsnummer)}</div></div>
-    <div class="field"><label>Auftragsdatum / Order Date</label><div class="val">${fdatStr(r.auftragsdatum)}</div></div>
+    <div class="field"><label>Kunde / ${escHtml(t.customer)}</label><div class="val">${fd(r.kundenname)}</div></div>
+    <div class="field"><label>Auftragsnr. / ${escHtml(t.orderNo)}</label><div class="val">${fd(r.auftragsnummer)}</div></div>
+    <div class="field"><label>Auftragsdatum / ${escHtml(t.orderDate)}</label><div class="val">${fdatStr(r.auftragsdatum)}</div></div>
   </div>
 </div>
 
 <div class="section">
-  <div class="section-title">Artikelinformationen &nbsp;/&nbsp; Article Information</div>
+  <div class="section-title">Artikelinformationen &nbsp;/&nbsp; ${escHtml(t.articleInfo)}</div>
   <div class="row">
-    <div class="field"><label>Artikel / Article Name</label><div class="val">${fd(r.artikelname)}</div></div>
-    <div class="field"><label>Artikelnr. / Article No.</label><div class="val">${fd(r.artikelnummer)}</div></div>
+    <div class="field"><label>Artikel / ${escHtml(t.articleName)}</label><div class="val">${fd(r.artikelname)}</div></div>
+    <div class="field"><label>Artikelnr. / ${escHtml(t.articleNo)}</label><div class="val">${fd(r.artikelnummer)}</div></div>
   </div>
   <div class="row three">
-    <div class="field"><label>Menge / Quantity</label><div class="val">${fd(r.menge)}</div></div>
-    <div class="field"><label>Lieferant / Supplier</label><div class="val">${fd(r.lieferantenname)}</div></div>
-    <div class="field"><label>Lief.-Artikelnr. / Supplier Art. No.</label><div class="val">${fd(r.lieferanten_artikelnummer)}</div></div>
+    <div class="field"><label>Menge / ${escHtml(t.quantity)}</label><div class="val">${fd(r.menge)}</div></div>
+    <div class="field"><label>Lieferant / ${escHtml(t.supplier)}</label><div class="val">${fd(r.lieferantenname)}</div></div>
+    <div class="field"><label>Lief.-Artikelnr. / ${escHtml(t.supplierArtNo)}</label><div class="val">${fd(r.lieferanten_artikelnummer)}</div></div>
   </div>
 </div>
 
 <div class="section">
-  <div class="section-title">Reklamationsgrund &nbsp;/&nbsp; Reason for Complaint</div>
+  <div class="section-title">Reklamationsgrund &nbsp;/&nbsp; ${escHtml(t.reasonComplaint)}</div>
   <div class="row">
     <div class="field"><label>Deutsch / German</label><div class="val grund">${fd(r.reklagrund)}</div></div>
-    <div class="field"><label>Englisch / English</label><div class="val grund" style="min-height:48px;">${escHtml(reklagrundEN)}</div></div>
+    <div class="field"><label>${escHtml(spracheLabel[lang] || 'Übersetzung')}</label><div class="val grund" style="min-height:48px;">${escHtml(reklagrundUebersetzt)}</div></div>
   </div>
 </div>
 
 ${bilder ? `<div class="section">
-  <div class="section-title">Fotos &nbsp;/&nbsp; Photos</div>
+  <div class="section-title">Fotos &nbsp;/&nbsp; ${escHtml(t.photos)}</div>
   <div class="bilder-grid">${bilder}</div>
 </div>` : ''}
 
@@ -1413,3 +1454,1124 @@ ${bilder ? `<div class="section">
   win.document.close();
   win.addEventListener('load', () => win.print());
 }
+
+// ── Hersteller PDF / Druckformular ────────────────────────
+function openHPdfSprachwahl() {
+  document.getElementById('h-pdf-sprach-modal').classList.remove('hidden');
+}
+
+function closeHPdfSprachwahl() {
+  document.getElementById('h-pdf-sprach-modal').classList.add('hidden');
+}
+
+async function druckeHerstellerReklamation(lang) {
+  closeHPdfSprachwahl();
+  const r = alleHersteller.find(x => x.id === hDetailOpenId);
+  if (!r) return;
+
+  const spracheLabel = { en: 'Englisch / English', pl: 'Polnisch / Polski' };
+
+  let beanstandungUebersetzt = '';
+  try {
+    const res = await fetch(
+      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(r.beanstandung || '')}&langpair=de|${lang}`
+    );
+    const data = await res.json();
+    beanstandungUebersetzt = data?.responseData?.translatedText || '';
+  } catch (_) { beanstandungUebersetzt = ''; }
+
+  const fd   = s => escHtml(s || '–');
+  const fdat = iso => {
+    if (!iso) return '–';
+    return new Date(iso).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });
+  };
+  const fdatStr = s => {
+    if (!s) return '–';
+    const p = s.split('-');
+    return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : s;
+  };
+
+  const statusDE = { offen: 'Offen', gesendet: 'Gesendet', rueckmeldung: 'Rückmeldung', erledigt: 'Erledigt' };
+  const statusEN = { offen: 'Open', gesendet: 'Sent', rueckmeldung: 'Feedback Received', erledigt: 'Completed' };
+  const statusPL = { offen: 'Otwarta', gesendet: 'Wysłana', rueckmeldung: 'Odpowiedź', erledigt: 'Zakończona' };
+  const statusMap = lang === 'pl' ? statusPL : statusEN;
+  const stDE = statusDE[r.status] || r.status;
+  const stX  = statusMap[r.status] || r.status;
+
+  const L = {
+    en: {
+      supplierInfo: 'Supplier Information', supplier: 'Supplier', invoiceNo: 'Invoice No.', batchNo: 'Batch No.',
+      articleInfo: 'Article Information', articleName: 'Article Name', articleNo: 'Article No.',
+      quantity: 'Quantity', dateFound: 'Date Found', dateReported: 'Date Reported',
+      complaint: 'Complaint', photos: 'Photos', formTitle: 'Complaint Form'
+    },
+    pl: {
+      supplierInfo: 'Informacje o dostawcy', supplier: 'Dostawca', invoiceNo: 'Nr faktury', batchNo: 'Nr partii',
+      articleInfo: 'Informacje o artykule', articleName: 'Nazwa artykułu', articleNo: 'Nr artykułu',
+      quantity: 'Ilość', dateFound: 'Data wykrycia', dateReported: 'Data zgłoszenia',
+      complaint: 'Reklamacja', photos: 'Zdjęcia', formTitle: 'Formularz reklamacyjny'
+    }
+  };
+  const t = L[lang] || L.en;
+
+  const bilder = (r.bilder || []).map(b =>
+    `<img src="/uploads/${escHtml(b)}" onerror="this.style.display='none'" />`
+  ).join('');
+
+  const html = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
+<title>Hersteller-Reklamation ${escHtml(r.nummer)}</title>
+<style>
+  @page { size: A4; margin: 15mm 18mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; color: #1a1a1a; background: #fff; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1a1a2e; padding-bottom: 12px; margin-bottom: 18px; }
+  .header-left .subtitle { font-size: 9pt; color: #555; margin-top: 2px; }
+  .header-right { text-align: right; }
+  .rekla-nr { font-size: 18pt; font-weight: 800; color: #e53e3e; letter-spacing: .03em; margin: 6px 0 4px; }
+  .rekla-date { font-size: 8.5pt; color: #666; margin-top: 3px; }
+  .status-pill { display: inline-block; margin-top: 6px; padding: 3px 12px; border-radius: 99px; font-size: 8.5pt; font-weight: 700; background: #e8f0fe; color: #1a56db; border: 1px solid #93c5fd; }
+  .section { margin-bottom: 18px; }
+  .section-title { font-size: 8.5pt; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: #fff; background: #1a1a2e; padding: 5px 10px; margin-bottom: 10px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+  .row.three { grid-template-columns: 1fr 1fr 1fr; }
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: 7.5pt; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+  .field .val { font-size: 10.5pt; font-weight: 600; color: #1a1a1a; border-bottom: 1px solid #ddd; padding-bottom: 3px; min-height: 20px; }
+  .field .val.grund { white-space: pre-wrap; border: 1px solid #ddd; padding: 8px 10px; background: #fafafa; font-weight: 400; line-height: 1.5; min-height: 52px; }
+  .bilder-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .bilder-grid img { width: 200px; height: 150px; object-fit: cover; border: 1px solid #ccc; border-radius: 4px; }
+  .footer { margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; display: flex; justify-content: space-between; font-size: 8pt; color: #888; }
+</style></head><body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="subtitle" style="margin-bottom:4px;font-size:9pt;color:#555;">Reklamationsformular &nbsp;/&nbsp; ${escHtml(t.formTitle)}</div>
+    <div class="rekla-nr">${fd(r.nummer)}</div>
+    <div class="rekla-date">Erstellt / Created: ${fdat(r.erstellt_am)} &nbsp;·&nbsp; ${fd(r.erstellt_von)}</div>
+    <div class="status-pill">${stDE} / ${stX}</div>
+  </div>
+  <div class="header-right">
+    <img src="${location.origin}/logo.png" alt="PITUPITA" style="height:54px;max-width:180px;object-fit:contain;" />
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Lieferantendaten &nbsp;/&nbsp; ${escHtml(t.supplierInfo)}</div>
+  <div class="row three">
+    <div class="field"><label>Lieferant / ${escHtml(t.supplier)}</label><div class="val">${fd(r.lieferant)}</div></div>
+    <div class="field"><label>Rechnungsnr. / ${escHtml(t.invoiceNo)}</label><div class="val">${fd(r.ansprechpartner)}</div></div>
+    <div class="field"><label>Chargennr. / ${escHtml(t.batchNo)}</label><div class="val">${fd(r.chargennummer)}</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Artikelinformationen &nbsp;/&nbsp; ${escHtml(t.articleInfo)}</div>
+  <div class="row">
+    <div class="field"><label>Artikel / ${escHtml(t.articleName)}</label><div class="val">${fd(r.artikelname)}</div></div>
+    <div class="field"><label>Artikelnr. / ${escHtml(t.articleNo)}</label><div class="val">${fd(r.artikelnummer)}</div></div>
+  </div>
+  <div class="row three">
+    <div class="field"><label>Menge / ${escHtml(t.quantity)}</label><div class="val">${fd(r.menge)} ${fd(r.einheit)}</div></div>
+    <div class="field"><label>Datum Befund / ${escHtml(t.dateFound)}</label><div class="val">${fdatStr(r.datum_befund)}</div></div>
+    <div class="field"><label>Datum Meldung / ${escHtml(t.dateReported)}</label><div class="val">${fdatStr(r.datum_meldung)}</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Beanstandung &nbsp;/&nbsp; ${escHtml(t.complaint)}</div>
+  <div class="row">
+    <div class="field"><label>Deutsch / German</label><div class="val grund">${fd(r.beanstandung)}</div></div>
+    <div class="field"><label>${escHtml(spracheLabel[lang] || 'Übersetzung')}</label><div class="val grund" style="min-height:48px;">${escHtml(beanstandungUebersetzt)}</div></div>
+  </div>
+</div>
+
+${bilder ? `<div class="section">
+  <div class="section-title">Fotos &nbsp;/&nbsp; ${escHtml(t.photos)}</div>
+  <div class="bilder-grid">${bilder}</div>
+</div>` : ''}
+
+<div class="footer">
+  <span>PITUPITA &nbsp;·&nbsp; Hersteller-Reklamation ${fd(r.nummer)}</span>
+  <span>Gedruckt / Printed: ${new Date().toLocaleDateString('de-DE')}</span>
+</div>
+
+</body></html>`;
+
+  const win = window.open('', '_blank', 'width=900,height=700');
+  win.document.write(html);
+  win.document.close();
+  win.addEventListener('load', () => win.print());
+}
+
+// ══════════════════════════════════════════════════════════
+// ── HERSTELLER-REKLAMATIONEN ──────────────────────────────
+// ══════════════════════════════════════════════════════════
+
+let alleHersteller   = [];
+let aktuellerHFilter = 'aktiv';
+let hDetailOpenId    = null;
+let hAktionId        = null;
+let hAktionSchritt   = null;
+let aktuellerView    = 'kunden';
+let hNeuBilder       = [];   // neue Bilder im Neu-Modal
+let hEBilderNeu      = [];   // neue Bilder im Edit-Modal
+let hEBilderLoeschen = [];   // zu löschende Dateinamen im Edit-Modal
+
+// ── View umschalten ───────────────────────────────────────
+function setView(view) {
+  aktuellerView = view;
+  const kundenMain    = document.getElementById('kunden-main');
+  const herstellerMain = document.getElementById('hersteller-main');
+  const tabKunden     = document.getElementById('tab-kunden');
+  const tabHersteller = document.getElementById('tab-hersteller');
+
+  if (view === 'kunden') {
+    kundenMain.classList.remove('hidden');
+    herstellerMain.classList.add('hidden');
+    tabKunden.classList.add('active');
+    tabHersteller.classList.remove('active');
+  } else {
+    kundenMain.classList.add('hidden');
+    herstellerMain.classList.remove('hidden');
+    tabKunden.classList.remove('active');
+    tabHersteller.classList.add('active');
+    if (alleHersteller.length === 0) ladeHersteller();
+  }
+}
+
+// ── Socket.IO Hersteller-Events ───────────────────────────
+socket.on('hersteller_neu', r => {
+  alleHersteller.unshift(r);
+  renderHListe();
+  aktualisiereHStatistik();
+  if (r.erstellt_von !== userName)
+    toast(`Neue Hersteller-Reklamation: ${r.nummer} (${r.lieferant})`, 'info');
+});
+socket.on('hersteller_update', r => {
+  const idx = alleHersteller.findIndex(x => x.id === r.id);
+  if (idx !== -1) alleHersteller[idx] = r;
+  else alleHersteller.unshift(r);
+  renderHListe();
+  aktualisiereHStatistik();
+  if (hDetailOpenId === r.id) renderHDetail(r);
+});
+socket.on('hersteller_geloescht', ({ id }) => {
+  alleHersteller = alleHersteller.filter(r => r.id !== id);
+  renderHListe();
+  aktualisiereHStatistik();
+  if (hDetailOpenId === id) closeHDetailModal();
+});
+
+// ── Daten laden ───────────────────────────────────────────
+async function ladeHersteller() {
+  try {
+    const res = await fetch('/api/hersteller');
+    if (res.status === 401) { zeigeLoginModal(); return; }
+    alleHersteller = await res.json();
+    renderHListe();
+    aktualisiereHAktivLieferanten();
+    aktualisiereHStatistik();
+  } catch {
+    toast('Fehler beim Laden der Hersteller-Reklamationen', 'error');
+  }
+}
+
+async function aktualisiereHStatistik() {
+  try {
+    const res = await fetch('/api/hersteller/statistik');
+    const d   = await res.json();
+    animateNum('h-stat-offen',       d.offen);
+    animateNum('h-stat-gesendet',    d.gesendet);
+    animateNum('h-stat-rueckmeldung', d.rueckmeldung);
+    animateNum('h-stat-erledigt',    d.erledigt);
+    animateNum('h-stat-gesamt',      d.gesamt);
+    animateNum('h-stat-erinnerungen', d.erinnerungen);
+
+    const eCard = document.getElementById('h-stat-erinnerung-card');
+    if (eCard) eCard.style.display = d.erinnerungen > 0 ? '' : 'none';
+
+    // Tab-Badge
+    const badge = document.getElementById('h-erinnerung-badge');
+    if (badge) {
+      badge.textContent = d.erinnerungen;
+      badge.classList.toggle('hidden', d.erinnerungen === 0);
+    }
+    // Filter-Badge
+    const filterBadge = document.getElementById('h-filter-badge');
+    if (filterBadge) {
+      filterBadge.textContent = d.erinnerungen;
+      filterBadge.classList.toggle('hidden', d.erinnerungen === 0);
+    }
+  } catch {}
+}
+
+// ── Filter & Liste ────────────────────────────────────────
+function setHFilter(filter, btn) {
+  aktuellerHFilter = filter;
+  document.querySelectorAll('#hersteller-main .tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (filter === 'aktiv') {
+    aktualisiereHAktivLieferanten();
+  } else {
+    document.getElementById('h-aktiv-toolbar').classList.add('hidden');
+  }
+  renderHListe();
+}
+
+function aktualisiereHAktivLieferanten() {
+  const aktive = alleHersteller.filter(r => r.status !== 'erledigt');
+  const lieferanten = [...new Set(aktive.map(r => r.lieferant).filter(Boolean))].sort();
+  const toolbar = document.getElementById('h-aktiv-toolbar');
+  if (lieferanten.length === 0) {
+    toolbar.classList.add('hidden');
+    return;
+  }
+  const sel = document.getElementById('h-aktiv-lieferant-select');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Alle Lieferanten</option>' +
+    lieferanten.map(l => `<option value="${escHtml(l)}" ${l === current ? 'selected' : ''}>${escHtml(l)}</option>`).join('');
+  toolbar.classList.remove('hidden');
+}
+
+function exportHerstellerCSV() {
+  const a = document.createElement('a');
+  a.href = '/api/export/hersteller-csv';
+  a.click();
+}
+
+function renderHListe() {
+  const suchtext = (document.getElementById('h-search-input')?.value || '').toLowerCase();
+  const heute    = new Date().toISOString().slice(0, 10);
+
+  const gefiltert = alleHersteller.filter(r => {
+    if (aktuellerHFilter !== 'archiv' && r.status === 'erledigt') return false;
+    if (aktuellerHFilter === 'archiv'       && r.status !== 'erledigt') return false;
+    if (aktuellerHFilter === 'offen'        && r.status !== 'offen') return false;
+    if (aktuellerHFilter === 'gesendet'     && r.status !== 'gesendet') return false;
+    if (aktuellerHFilter === 'rueckmeldung' && r.status !== 'rueckmeldung') return false;
+    if (aktuellerHFilter === 'erinnerungen') {
+      if (r.status === 'erledigt') return false;
+      const hat = (r.erinnerungen || []).some(e => !e.gesendet_am && e.datum && e.datum <= heute);
+      if (!hat) return false;
+    }
+    if (aktuellerHFilter === 'aktiv') {
+      const lieferantFilter = document.getElementById('h-aktiv-lieferant-select')?.value;
+      if (lieferantFilter && r.lieferant !== lieferantFilter) return false;
+    }
+    if (suchtext) {
+      const hay = `${r.nummer} ${r.lieferant} ${r.artikelname} ${r.artikelnummer} ${r.chargennummer}`.toLowerCase();
+      if (!hay.includes(suchtext)) return false;
+    }
+    return true;
+  });
+
+  const container = document.getElementById('h-rekla-liste');
+  if (!container) return;
+  if (gefiltert.length === 0) {
+    container.innerHTML = `<div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+      </svg>
+      <p>${suchtext ? 'Keine Ergebnisse' : 'Keine Hersteller-Reklamationen'}</p>
+    </div>`;
+    return;
+  }
+  container.innerHTML = gefiltert.map(r => renderHKarte(r)).join('');
+}
+
+function getHStatusInfo(r) {
+  if (r.status === 'offen')         return { label: 'Offen',        cls: 'status-neu' };
+  if (r.status === 'gesendet')      return { label: 'Gesendet',     cls: 'status-lieferant' };
+  if (r.status === 'rueckmeldung') {
+    if (r.entscheidung === 'anerkannt')  return { label: 'Anerkannt',    cls: 'status-anerkannt' };
+    if (r.entscheidung === 'abgelehnt')  return { label: 'Abgelehnt',    cls: 'status-abgelehnt' };
+    if (r.entscheidung === 'teilweise')  return { label: 'Teilw. anerk.', cls: 'status-kundenloesung' };
+  }
+  if (r.status === 'erledigt')      return { label: 'Erledigt',     cls: 'status-erledigt' };
+  return { label: r.status, cls: '' };
+}
+
+function getFristChip(r) {
+  if (r.status === 'erledigt') return '';
+  // früheste ausstehende Erinnerung
+  const pending = (r.erinnerungen || []).filter(e => !e.gesendet_am && e.datum)
+    .sort((a, b) => a.datum.localeCompare(b.datum));
+  if (!pending.length) return '';
+  const heute   = new Date(); heute.setHours(0,0,0,0);
+  const frist   = new Date(pending[0].datum); frist.setHours(0,0,0,0);
+  const diffTage = Math.round((frist - heute) / 86400000);
+  if (diffTage < 0)   return `<span class="frist-chip frist-ueberfaellig">⚠ Überfällig ${Math.abs(diffTage)} Tg.</span>`;
+  if (diffTage === 0) return `<span class="frist-chip frist-heute">🔔 Heute fällig</span>`;
+  if (diffTage <= 3)  return `<span class="frist-chip frist-bald">🔔 In ${diffTage} Tg.</span>`;
+  return `<span class="frist-chip frist-ok">📅 In ${diffTage} Tg.</span>`;
+}
+
+function renderHSchrittLeiste(r) {
+  const schritte = [
+    { nr: 1, kurz: 'Erfassung',  done: true },
+    { nr: 2, kurz: 'Gesendet',   done: !!r.gesendet_am },
+    { nr: 3, kurz: 'Rückmeldg.', done: !!r.rueckmeldung_am },
+    { nr: 4, kurz: 'Erledigt',   done: !!r.erledigt_am },
+  ];
+  const aktivIdx = schritte.findIndex(s => !s.done);
+  return `<div class="schritt-leiste">${schritte.map((s, i) => {
+    const isCurrent = !s.done && s.nr === (aktivIdx === -1 ? 5 : schritte[aktivIdx].nr);
+    const cls = s.done ? 'sl-done' : isCurrent ? 'sl-active' : 'sl-pending';
+    return `<div class="sl-step ${cls}"><span class="sl-nr">${s.done ? '✓' : s.nr}</span><span class="sl-label">${s.kurz}</span></div>`;
+  }).join('')}</div>`;
+}
+
+function renderHKarte(r) {
+  const statusInfo = getHStatusInfo(r);
+  const fristChip  = getFristChip(r);
+  const hinweiseBadge = r.hinweise.length > 0
+    ? `<span class="hinweise-badge">💬 ${r.hinweise.length}</span>` : '';
+  return `
+    <div class="rekla-card" onclick="openHDetail(${r.id})">
+      <div class="rekla-card-top">
+        <span class="rekla-nr">${escHtml(r.nummer)}</span>
+        <div class="rekla-card-badges">
+          ${fristChip}
+          ${hinweiseBadge}
+          <span class="status-badge ${statusInfo.cls}">${statusInfo.label}</span>
+        </div>
+      </div>
+      <div class="rekla-card-body">
+        <div class="rekla-kunde"><strong>${escHtml(r.lieferant)}</strong>${r.ansprechpartner ? ` · ${escHtml(r.ansprechpartner)}` : ''}</div>
+        <div class="rekla-artikel">${escHtml(r.artikelname)}${r.artikelnummer ? ` <span class="rekla-artnr">(${escHtml(r.artikelnummer)})</span>` : ''} · ${r.menge} ${escHtml(r.einheit)}${r.chargennummer ? ` · Ch: ${escHtml(r.chargennummer)}` : ''}</div>
+        <div class="rekla-grund">${escHtml(r.beanstandung)}</div>
+      </div>
+      ${renderHSchrittLeiste(r)}
+      <div class="rekla-card-footer">
+        <span>${formatDatum(r.erstellt_am)} · ${escHtml(r.erstellt_von)}</span>
+      </div>
+    </div>`;
+}
+
+// ── Hersteller Bilder Neu-Modal ───────────────────────────
+function initHNeuDropzone() {
+  const zone  = document.getElementById('h-bilder-zone');
+  const input = document.getElementById('h-bilder-input');
+  if (!zone || !input) return;
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    hAddNeuBilder([...e.dataTransfer.files].filter(f => f.type.startsWith('image/')));
+  });
+  zone.addEventListener('click', e => { if (e.target !== input && e.target.htmlFor !== 'h-bilder-input') input.click(); });
+  input.addEventListener('change', () => { hAddNeuBilder([...input.files]); input.value = ''; });
+}
+
+async function hAddNeuBilder(files) {
+  const komprimiert = await komprimiereDateien(files);
+  hNeuBilder.push(...komprimiert);
+  hRenderNeuVorschau();
+}
+
+function hRenderNeuVorschau() {
+  const container = document.getElementById('h-bilder-preview');
+  if (!container) return;
+  container.innerHTML = hNeuBilder.map((f, i) => {
+    const url = URL.createObjectURL(f);
+    return `<div class="vorschau-item">
+      <img src="${url}" alt="${escHtml(f.name)}" />
+      <button type="button" onclick="hRemoveNeuBild(${i})" title="Entfernen">×</button>
+    </div>`;
+  }).join('');
+}
+
+function hRemoveNeuBild(i) {
+  hNeuBilder.splice(i, 1);
+  hRenderNeuVorschau();
+}
+
+// ── Hersteller Bilder Edit-Modal ──────────────────────────
+function initHEditDropzone() {
+  const zone  = document.getElementById('he-bilder-zone');
+  const input = document.getElementById('he-bilder-input');
+  if (!zone || !input) return;
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    hEBilderHinzufuegen([...e.dataTransfer.files].filter(f => f.type.startsWith('image/')));
+  });
+  input.addEventListener('change', () => { hEBilderHinzufuegen([...input.files]); input.value = ''; });
+}
+
+async function hEBilderHinzufuegen(files) {
+  const komprimiert = await komprimiereDateien(files);
+  hEBilderNeu.push(...komprimiert);
+  const grid = document.getElementById('he-bilder-grid');
+  if (!grid) return;
+  hEBilderNeu.forEach((f, i) => {
+    const id = 'he-bild-neu-' + i;
+    if (document.getElementById(id)) return;
+    const url = URL.createObjectURL(f);
+    const div = document.createElement('div');
+    div.className = 'e-bild-item'; div.id = id;
+    div.innerHTML = `<img src="${url}" class="bild-thumb" /><button type="button" class="e-bild-del" onclick="hEBildNeuEntfernen(${i})" title="Entfernen">×</button>`;
+    grid.appendChild(div);
+  });
+  document.getElementById('he-bilder-input').value = '';
+}
+
+function hEBildNeuEntfernen(i) {
+  hEBilderNeu.splice(i, 1);
+  const el = document.getElementById('he-bild-neu-' + i);
+  if (el) el.remove();
+  document.querySelectorAll('[id^="he-bild-neu-"]').forEach((el, idx) => {
+    el.id = 'he-bild-neu-' + idx;
+    const btn = el.querySelector('button');
+    if (btn) btn.setAttribute('onclick', `hEBildNeuEntfernen(${idx})`);
+  });
+}
+
+function hEBildLoeschen(i, filename) {
+  hEBilderLoeschen.push(filename);
+  const el = document.getElementById('he-bild-item-' + i);
+  if (el) el.remove();
+}
+
+// ── Erinnerungen-Liste Hilfsfunktionen ────────────────────
+function hGetErinnerungenNeu() {
+  return [...document.querySelectorAll('#h-erinnerungen-liste .erinnerung-datum-input')]
+    .map(el => el.value).filter(Boolean);
+}
+
+function hAddErinnerungNeu(val) {
+  const liste = document.getElementById('h-erinnerungen-liste');
+  if (!liste) return;
+  const idx = liste.children.length;
+  const row = document.createElement('div');
+  row.className = 'erinnerung-row';
+  row.style.cssText = 'display:flex;align-items:center;gap:8px';
+  row.innerHTML = `<input type="date" class="erinnerung-datum-input" value="${val || ''}" style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;background:#2d3f55;color:var(--text);font-size:.9rem" />
+    <button type="button" onclick="this.closest('.erinnerung-row').remove()" style="background:none;border:none;color:var(--danger,#ef4444);font-size:1.3rem;cursor:pointer;line-height:1" title="Entfernen">×</button>`;
+  liste.appendChild(row);
+}
+
+function hRenderErinnerungenEdit(erinnerungen, containerId) {
+  const liste = document.getElementById(containerId);
+  if (!liste) return;
+  liste.innerHTML = '';
+  (erinnerungen || []).forEach(e => {
+    const row = document.createElement('div');
+    row.className = 'erinnerung-row';
+    row.style.cssText = 'display:flex;align-items:center;gap:8px';
+    const gesendet = e.gesendet_am ? ` <span style="font-size:.75rem;color:var(--success,#22c55e)">✓ gesendet ${formatDatum2(e.gesendet_am.slice(0,10))}</span>` : '';
+    row.innerHTML = `<input type="date" class="erinnerung-datum-input" value="${e.datum || ''}" style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;background:#2d3f55;color:var(--text);font-size:.9rem" />${gesendet}
+      <button type="button" onclick="this.closest('.erinnerung-row').remove()" style="background:none;border:none;color:var(--danger,#ef4444);font-size:1.3rem;cursor:pointer;line-height:1" title="Entfernen">×</button>`;
+    liste.appendChild(row);
+  });
+}
+
+function hGetErinnerungenFromContainer(containerId) {
+  return [...document.querySelectorAll(`#${containerId} .erinnerung-datum-input`)]
+    .map(el => el.value).filter(Boolean);
+}
+
+// ── Neue Hersteller-Reklamation ───────────────────────────
+async function openHNeuModal() {
+  const ok = await pruefeSession();
+  if (!ok || !userName) { zeigeLoginModal(); return; }
+  document.getElementById('h-neu-modal').classList.remove('hidden');
+  initHNeuDropzone();
+}
+
+function closeHNeuModal() {
+  document.getElementById('h-neu-modal').classList.add('hidden');
+  ['h-lieferant','h-ansprechpartner','h-artikelnummer','h-artikelname',
+   'h-chargennummer','h-beanstandung','h-datum-befund','h-datum-meldung'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const menge  = document.getElementById('h-menge');
+  const einheit = document.getElementById('h-einheit');
+  if (menge)  menge.value  = '1';
+  if (einheit) einheit.value = 'Stk.';
+  const liste = document.getElementById('h-erinnerungen-liste');
+  if (liste) liste.innerHTML = '';
+  hNeuBilder = [];
+  hRenderNeuVorschau();
+}
+
+async function submitNeuHersteller() {
+  const lieferant    = document.getElementById('h-lieferant')?.value.trim();
+  const artikelname  = document.getElementById('h-artikelname')?.value.trim();
+  const beanstandung = document.getElementById('h-beanstandung')?.value.trim();
+  if (!lieferant)    { shake(document.getElementById('h-lieferant'));    return; }
+  if (!artikelname)  { shake(document.getElementById('h-artikelname'));  return; }
+  if (!beanstandung) { shake(document.getElementById('h-beanstandung')); return; }
+  if (!userName)     { toast('Bitte erst einloggen', 'error'); return; }
+
+  const fd = new FormData();
+  fd.append('lieferant',        lieferant);
+  fd.append('ansprechpartner',  document.getElementById('h-ansprechpartner')?.value.trim() || '');
+  fd.append('artikelnummer',    document.getElementById('h-artikelnummer')?.value.trim() || '');
+  fd.append('artikelname',      artikelname);
+  fd.append('menge',            document.getElementById('h-menge')?.value || 1);
+  fd.append('einheit',          document.getElementById('h-einheit')?.value.trim() || 'Stk.');
+  fd.append('chargennummer',    document.getElementById('h-chargennummer')?.value.trim() || '');
+  fd.append('beanstandung',  beanstandung);
+  fd.append('datum_befund',  document.getElementById('h-datum-befund')?.value || '');
+  fd.append('datum_meldung', document.getElementById('h-datum-meldung')?.value || '');
+  fd.append('erinnerungen',  JSON.stringify(hGetErinnerungenNeu()));
+  fd.append('erstellt_von',  userName);
+  for (const f of hNeuBilder) fd.append('bilder', f);
+  try {
+    const res = await fetch('/api/hersteller', { method: 'POST', body: fd });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.status);
+    closeHNeuModal();
+    toast('Hersteller-Reklamation angelegt', 'success');
+  } catch (e) {
+    toast('Fehler: ' + (e.message || 'Unbekannt'), 'error');
+  }
+}
+
+// ── Detail Modal ──────────────────────────────────────────
+function openHDetail(id) {
+  const r = alleHersteller.find(r => r.id === id);
+  if (!r) return;
+  hDetailOpenId = id;
+  document.getElementById('h-detail-modal').classList.remove('hidden');
+  renderHDetail(r);
+}
+
+function closeHDetailModal() {
+  hDetailOpenId = null;
+  document.getElementById('h-detail-modal').classList.add('hidden');
+}
+
+function renderHDetail(r) {
+  const statusInfo = getHStatusInfo(r);
+  document.getElementById('h-detail-nr').textContent = r.nummer;
+  const badge = document.getElementById('h-detail-badge');
+  badge.textContent = statusInfo.label;
+  badge.className = `detail-status-badge ${statusInfo.cls}`;
+
+  const canSend     = !r.gesendet_am;
+  const canRueck    = !r.rueckmeldung_am;
+  const canErledigt = !r.erledigt_am;
+
+  const fristChip = getFristChip(r);
+
+  document.getElementById('h-detail-content').innerHTML = `
+    <div class="timeline">
+      ${hSchritt1(r)}
+      ${hSchritt2(r, canSend)}
+      ${hSchritt3(r, canRueck)}
+      ${hSchritt4(r, canErledigt)}
+    </div>
+    <div class="hinweise-section">
+      <h3>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Hinweise
+      </h3>
+      <div class="hinweise-list">
+        ${r.hinweise.length === 0
+          ? '<p class="no-hinweise">Noch keine Hinweise.</p>'
+          : r.hinweise.map((h, idx) => `
+            <div class="hinweis-item" id="h-hinweis-item-${r.id}-${idx}">
+              <div class="hinweis-text">${escHtml(h.text)}</div>
+              <div class="hinweis-meta">
+                ${escHtml(h.von)} · ${formatDatum(h.am)}
+                <button class="hinweis-edit-btn" onclick="editHHinweis(${r.id}, ${idx})">✏ Bearbeiten</button>
+              </div>
+            </div>`).join('')}
+      </div>
+      <div class="hinweis-add">
+        <textarea id="h-hinweis-input" placeholder="Hinweis hinzufügen..." rows="2" maxlength="500"></textarea>
+        <button class="btn-action" onclick="addHHinweis(${r.id})">Hinzufügen</button>
+      </div>
+    </div>
+    <div class="detail-footer">
+      <button class="btn-danger-sm" onclick="loescheHersteller(${r.id})">Reklamation löschen</button>
+    </div>
+  `;
+}
+
+function hSchritt1(r) {
+  const bilderHtml = (r.bilder || []).length > 0 ? `
+    <div class="bilder-grid">
+      ${(r.bilder).map(b => `
+        <a href="/uploads/${escHtml(b)}" target="_blank">
+          <img src="/uploads/${escHtml(b)}" class="bild-thumb" alt="Foto" loading="lazy" />
+        </a>`).join('')}
+    </div>` : '';
+
+  const erinnerungenHtml = (r.erinnerungen || []).length > 0
+    ? (r.erinnerungen).map(e => {
+        const heute = new Date(); heute.setHours(0,0,0,0);
+        const frist = new Date(e.datum); frist.setHours(0,0,0,0);
+        const diff  = Math.round((frist - heute) / 86400000);
+        let chip = '';
+        if (e.gesendet_am) chip = `<span class="frist-chip" style="background:#16a34a22;color:#22c55e;border-color:#22c55e55">✓ Mail gesendet</span>`;
+        else if (diff < 0) chip = `<span class="frist-chip frist-ueberfaellig">⚠ Überfällig</span>`;
+        else if (diff === 0) chip = `<span class="frist-chip frist-heute">🔔 Heute</span>`;
+        else if (diff <= 3)  chip = `<span class="frist-chip frist-bald">🔔 In ${diff} Tg.</span>`;
+        else chip = `<span class="frist-chip frist-ok">📅 In ${diff} Tg.</span>`;
+        return `<div style="display:flex;align-items:center;gap:6px">${formatDatum2(e.datum)} ${chip}</div>`;
+      }).join('')
+    : '';
+
+  return `
+    <div class="timeline-step done">
+      <div class="step-marker done">✓</div>
+      <div class="step-body">
+        <div class="step-title">Schritt 1 — Erfassung</div>
+        <div class="step-content">
+          <div class="step-grid">
+            <div><span class="step-label">Lieferant</span><span>${escHtml(r.lieferant)}</span></div>
+            ${r.ansprechpartner ? `<div><span class="step-label">Rechnungsnr. Lieferant</span><span>${escHtml(r.ansprechpartner)}</span></div>` : ''}
+            <div><span class="step-label">Artikel</span><span>${escHtml(r.artikelname)}${r.artikelnummer ? ` (${escHtml(r.artikelnummer)})` : ''}</span></div>
+            <div><span class="step-label">Menge</span><span>${r.menge} ${escHtml(r.einheit)}</span></div>
+            ${r.chargennummer ? `<div><span class="step-label">Charge</span><span>${escHtml(r.chargennummer)}</span></div>` : ''}
+            ${r.datum_befund  ? `<div><span class="step-label">Datum Befund</span><span>${formatDatum2(r.datum_befund)}</span></div>` : ''}
+            ${r.datum_meldung ? `<div><span class="step-label">Datum Meldung</span><span>${formatDatum2(r.datum_meldung)}</span></div>` : ''}
+            <div class="full"><span class="step-label">Beanstandung</span><span>${escHtml(r.beanstandung)}</span></div>
+          </div>
+          ${erinnerungenHtml ? `<div style="margin-top:8px"><span class="step-label">Erinnerungen</span><div style="margin-top:4px;display:flex;flex-direction:column;gap:4px">${erinnerungenHtml}</div></div>` : ''}
+          ${bilderHtml}
+          <div class="step-footer">Angelegt von <strong>${escHtml(r.erstellt_von)}</strong> · ${formatDatum(r.erstellt_am)}
+            <button class="btn-edit-step" onclick="openHAktionModal(${r.id}, 1)">✎ Ändern</button>
+            <button class="btn-edit-step" onclick="openHErinnerungModal(${r.id})" title="Erinnerungen verwalten">🔔 Erinnerungen</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function hSchritt2(r, canAct) {
+  const done = !!r.gesendet_am;
+  const cls  = done ? 'done' : 'active';
+  const artLabels = { email: 'per E-Mail', post: 'per Post', fax: 'per Fax', telefon: 'telefonisch', sonstig: 'sonstig' };
+  let body;
+  if (done) {
+    body = `<div class="step-done-info">
+      <span class="badge-lieferant">${artLabels[r.gesendet_art] || r.gesendet_art || 'gesendet'}</span>
+      · von <strong>${escHtml(r.gesendet_von)}</strong> · ${formatDatum(r.gesendet_am)}
+      <button class="btn-edit-step" onclick="openHAktionModal(${r.id}, 2)">✎ Ändern</button>
+    </div>`;
+  } else {
+    body = `<button class="btn-action" onclick="openHAktionModal(${r.id}, 2)">An Hersteller gesendet markieren</button>`;
+  }
+  return `
+    <div class="timeline-step ${cls}">
+      <div class="step-marker ${cls}">${done ? '✓' : '2'}</div>
+      <div class="step-body">
+        <div class="step-title">Schritt 2 — An Hersteller gesendet</div>
+        <div class="step-content">${body}</div>
+      </div>
+    </div>`;
+}
+
+function hSchritt3(r, canAct) {
+  const done = !!r.rueckmeldung_am;
+  const cls  = done ? 'done' : 'active';
+  let body;
+  if (done) {
+    const badge = r.entscheidung === 'anerkannt'
+      ? `<span class="badge-anerkannt">✓ Anerkannt</span>`
+      : r.entscheidung === 'abgelehnt'
+        ? `<span class="badge-abgelehnt">✗ Abgelehnt</span>`
+        : `<span class="badge-loesung">~ Teilw. anerkannt</span>`;
+    const gs  = r.gutschriftsnummer ? `· GS-Nr.: <strong>${escHtml(r.gutschriftsnummer)}</strong> ` : '';
+    const bet = r.gutschriftsbetrag ? `· Betrag: <strong>${escHtml(r.gutschriftsbetrag)}</strong> ` : '';
+    const txt = r.rueckmeldung_text ? `<div class="hinweis-item" style="margin-top:8px"><div class="hinweis-text">${escHtml(r.rueckmeldung_text)}</div></div>` : '';
+    body = `<div class="step-done-info">
+      ${badge} · von <strong>${escHtml(r.rueckmeldung_von)}</strong> · ${formatDatum(r.rueckmeldung_am)} ${gs}${bet}
+      <button class="btn-edit-step" onclick="openHAktionModal(${r.id}, 3)">✎ Ändern</button>
+    </div>${txt}`;
+  } else {
+    body = `<button class="btn-action" onclick="openHAktionModal(${r.id}, 3)">Rückmeldung des Herstellers erfassen</button>`;
+  }
+  return `
+    <div class="timeline-step ${cls}">
+      <div class="step-marker ${cls}">${done ? '✓' : '3'}</div>
+      <div class="step-body">
+        <div class="step-title">Schritt 3 — Rückmeldung Hersteller</div>
+        <div class="step-content">${body}</div>
+      </div>
+    </div>`;
+}
+
+function hSchritt4(r, canAct) {
+  const done = !!r.erledigt_am;
+  const cls  = done ? 'done' : 'active';
+  const body = done
+    ? `<div class="step-done-info">Erledigt von <strong>${escHtml(r.erledigt_von)}</strong> · ${formatDatum(r.erledigt_am)}
+        <button class="btn-rueckgaengig" onclick="hErledigtRueckgaengig(${r.id})">Rückgängig</button>
+       </div>`
+    : `<button class="btn-action btn-erledigt" onclick="openHAktionModal(${r.id}, 4)">Als erledigt markieren</button>`;
+  return `
+    <div class="timeline-step ${cls}">
+      <div class="step-marker ${cls}">${done ? '✓' : '4'}</div>
+      <div class="step-body">
+        <div class="step-title">Schritt 4 — Erledigt</div>
+        <div class="step-content">${body}</div>
+      </div>
+    </div>`;
+}
+
+// ── Aktion Modal ──────────────────────────────────────────
+function openHAktionModal(id, schritt) {
+  hAktionId     = id;
+  hAktionSchritt = schritt;
+  const r = alleHersteller.find(r => r.id === id);
+
+  const titel = {
+    1: 'Erfassung bearbeiten',
+    2: 'An Hersteller gesendet',
+    3: 'Rückmeldung erfassen',
+    4: 'Reklamation erledigen',
+  };
+  document.getElementById('h-aktion-titel').textContent = titel[schritt] || '';
+
+  let inhalt = '';
+  if (schritt === 1) {
+    hEBilderNeu = [];
+    hEBilderLoeschen = [];
+    const vorhandeneBilder = (r?.bilder || []).map((b, i) => `
+      <div class="e-bild-item" id="he-bild-item-${i}">
+        <img src="/uploads/${escHtml(b)}" class="bild-thumb" />
+        <button type="button" class="e-bild-del" onclick="hEBildLoeschen(${i},'${escHtml(b)}')" title="Entfernen">×</button>
+      </div>`).join('');
+    inhalt = `
+      <div class="aktion-field"><label>Lieferant *</label><input type="text" id="ha-lieferant" maxlength="100" value="${escHtml(r?.lieferant||'')}" /></div>
+      <div class="aktion-field"><label>Rechnungsnummer Lieferant</label><input type="text" id="ha-ansprechpartner" maxlength="100" value="${escHtml(r?.ansprechpartner||'')}" /></div>
+      <div class="aktion-field"><label>Artikelnummer</label><input type="text" id="ha-artikelnummer" maxlength="50" value="${escHtml(r?.artikelnummer||'')}" /></div>
+      <div class="aktion-field"><label>Artikelname *</label><input type="text" id="ha-artikelname" maxlength="100" value="${escHtml(r?.artikelname||'')}" /></div>
+      <div class="aktion-field"><label>Menge</label><input type="number" id="ha-menge" min="1" max="99999" value="${r?.menge||1}" /></div>
+      <div class="aktion-field"><label>Einheit</label><input type="text" id="ha-einheit" maxlength="20" value="${escHtml(r?.einheit||'Stk.')}" /></div>
+      <div class="aktion-field"><label>Chargennummer</label><input type="text" id="ha-chargennummer" maxlength="80" value="${escHtml(r?.chargennummer||'')}" /></div>
+      <div class="aktion-field"><label>Datum Befund</label><input type="date" id="ha-datum-befund" value="${escHtml(r?.datum_befund||'')}" /></div>
+      <div class="aktion-field"><label>Datum Meldung an Lieferanten</label><input type="date" id="ha-datum-meldung" value="${escHtml(r?.datum_meldung||'')}" /></div>
+      <div class="aktion-field"><label>Beanstandung *</label><textarea id="ha-beanstandung" rows="4" maxlength="1000">${escHtml(r?.beanstandung||'')}</textarea></div>
+      <div class="aktion-field">
+        <label>Fotos</label>
+        <div class="e-bilder-grid" id="he-bilder-grid">${vorhandeneBilder}</div>
+        <div class="bilder-dropzone" id="he-bilder-zone" style="margin-top:8px;cursor:pointer" onclick="document.getElementById('he-bilder-input').click()">
+          <input type="file" id="he-bilder-input" multiple accept="image/*" style="display:none" />
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:22px;height:22px;color:var(--text-muted)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span>Fotos hinzufügen oder <strong style="color:var(--accent)">AUSWÄHLEN</strong></span>
+        </div>
+      </div>
+      <div class="aktion-field">
+        <label>Erinnerungen an Lieferanten
+          <button type="button" onclick="hAddErinnerungEdit()" style="margin-left:8px;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:2px 10px;cursor:pointer;font-size:.85rem">+ Erinnerung</button>
+        </label>
+        <div id="ha-erinnerungen-liste" style="display:flex;flex-direction:column;gap:6px;margin-top:4px"></div>
+        <span style="font-size:.75rem;color:var(--muted)">Bei Fälligkeit wird eine E-Mail an service@pitupita.de gesendet</span>
+      </div>`;
+  } else if (schritt === 2) {
+    inhalt = `
+      <p style="color:var(--text2);font-size:.88rem;margin-bottom:12px">Wann und wie wurde die Reklamation an den Hersteller übermittelt?</p>
+      <div class="aktion-field"><label>Übermittlung</label>
+        <div class="radio-group">
+          <label class="radio-option"><input type="radio" name="h-art" value="email" ${r?.gesendet_art==='email'?'checked':''}/><span>📧 Per E-Mail</span></label>
+          <label class="radio-option"><input type="radio" name="h-art" value="post"  ${r?.gesendet_art==='post' ?'checked':''}/><span>📬 Per Post</span></label>
+          <label class="radio-option"><input type="radio" name="h-art" value="fax"   ${r?.gesendet_art==='fax'  ?'checked':''}/><span>📠 Per Fax</span></label>
+          <label class="radio-option"><input type="radio" name="h-art" value="telefon" ${r?.gesendet_art==='telefon'?'checked':''}/><span>📞 Telefonisch</span></label>
+          <label class="radio-option"><input type="radio" name="h-art" value="sonstig" ${(!r?.gesendet_art||r?.gesendet_art==='sonstig')?'checked':''}/><span>Sonstig</span></label>
+        </div>
+      </div>
+      <div class="aktion-field">
+        <label>Antwortfrist / Erinnerung setzen</label>
+        <input type="date" id="ha-erinnerung" value="${escHtml(r?.erinnerung_datum||'')}" />
+        <span style="font-size:.75rem;color:var(--muted)">Optional: Datum für Rückmeldungs-Erinnerung</span>
+      </div>`;
+  } else if (schritt === 3) {
+    inhalt = `
+      <div class="aktion-field"><label>Entscheidung des Herstellers</label>
+        <div class="radio-group">
+          <label class="radio-option"><input type="radio" name="h-entscheidung" value="anerkannt" ${r?.entscheidung==='anerkannt'?'checked':''}/><span class="radio-anerkannt">✓ Anerkannt</span></label>
+          <label class="radio-option"><input type="radio" name="h-entscheidung" value="teilweise" ${r?.entscheidung==='teilweise'?'checked':''}/><span style="color:#fbbf24">~ Teilweise anerkannt</span></label>
+          <label class="radio-option"><input type="radio" name="h-entscheidung" value="abgelehnt" ${r?.entscheidung==='abgelehnt'?'checked':''}/><span class="radio-abgelehnt">✗ Abgelehnt</span></label>
+        </div>
+      </div>
+      <div class="aktion-field"><label>Gutschriftsnummer (optional)</label><input type="text" id="ha-gutschriftsnr" maxlength="80" value="${escHtml(r?.gutschriftsnummer||'')}" placeholder="z.B. GS-2024-001" /></div>
+      <div class="aktion-field"><label>Gutschriftsbetrag (optional)</label><input type="text" id="ha-gutschriftsbetrag" maxlength="30" value="${escHtml(r?.gutschriftsbetrag||'')}" placeholder="z.B. 245,00 €" /></div>
+      <div class="aktion-field"><label>Rückmeldungstext / Begründung</label><textarea id="ha-rueckmeldung-text" rows="3" maxlength="1000">${escHtml(r?.rueckmeldung_text||'')}</textarea></div>`;
+  } else if (schritt === 4) {
+    inhalt = `<p>Diese Hersteller-Reklamation als vollständig <strong>erledigt</strong> markieren?</p>`;
+  }
+
+  document.getElementById('h-aktion-inhalt').innerHTML = inhalt;
+  if (schritt === 1) {
+    const ta = document.getElementById('ha-beanstandung');
+    if (ta) ta.style.cssText = 'width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:.9rem;color:var(--text);background:#2d3f55;resize:vertical;';
+    hRenderErinnerungenEdit(r?.erinnerungen || [], 'ha-erinnerungen-liste');
+    initHEditDropzone();
+  }
+  const hAktionModal = document.getElementById('h-aktion-modal');
+  hAktionModal.classList.remove('hidden');
+  hAktionModal.scrollTop = 0;
+}
+
+function closeHAktionModal() {
+  hAktionId = null;
+  hAktionSchritt = null;
+  document.getElementById('h-aktion-modal').classList.add('hidden');
+}
+
+async function submitHAktion() {
+  if (!hAktionId || !hAktionSchritt) return;
+
+  // Sonderfall: Erinnerungen verwalten (Schritt 99)
+  if (hAktionSchritt === 99) {
+    const liste = hGetErinnerungenFromContainer('ha-erinnerung-modal-liste');
+    try {
+      const res = await fetch(`/api/hersteller/${hAktionId}/erinnerung`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ erinnerungen: liste }),
+      });
+      if (!res.ok) throw new Error();
+      closeHAktionModal();
+      toast(liste.length ? `${liste.length} Erinnerung(en) gespeichert` : 'Erinnerungen gelöscht', 'success');
+    } catch { toast('Fehler', 'error'); }
+    return;
+  }
+
+  let url, body;
+
+  if (hAktionSchritt === 1) {
+    const lieferant    = document.getElementById('ha-lieferant')?.value.trim();
+    const artikelname  = document.getElementById('ha-artikelname')?.value.trim();
+    const beanstandung = document.getElementById('ha-beanstandung')?.value.trim();
+    if (!lieferant)    { shake(document.getElementById('ha-lieferant'));    return; }
+    if (!artikelname)  { shake(document.getElementById('ha-artikelname'));  return; }
+    if (!beanstandung) { shake(document.getElementById('ha-beanstandung')); return; }
+    url = `/api/hersteller/${hAktionId}/bearbeiten`;
+    const fd1 = new FormData();
+    fd1.append('lieferant',       lieferant);
+    fd1.append('ansprechpartner', document.getElementById('ha-ansprechpartner')?.value.trim() || '');
+    fd1.append('artikelnummer',   document.getElementById('ha-artikelnummer')?.value.trim() || '');
+    fd1.append('artikelname',     artikelname);
+    fd1.append('menge',           Number(document.getElementById('ha-menge')?.value) || 1);
+    fd1.append('einheit',         document.getElementById('ha-einheit')?.value.trim() || 'Stk.');
+    fd1.append('chargennummer',   document.getElementById('ha-chargennummer')?.value.trim() || '');
+    fd1.append('beanstandung',    beanstandung);
+    fd1.append('datum_befund',    document.getElementById('ha-datum-befund')?.value || '');
+    fd1.append('datum_meldung',   document.getElementById('ha-datum-meldung')?.value || '');
+    fd1.append('erinnerungen',    JSON.stringify(hGetErinnerungenFromContainer('ha-erinnerungen-liste')));
+    fd1.append('bilder_loeschen', JSON.stringify(hEBilderLoeschen));
+    for (const f of hEBilderNeu) fd1.append('bilder', f);
+    body = fd1;
+  } else if (hAktionSchritt === 2) {
+    const art = document.querySelector('input[name="h-art"]:checked')?.value;
+    if (!art) { toast('Bitte Übermittlungsart wählen', 'error'); return; }
+    url  = `/api/hersteller/${hAktionId}/senden`;
+    body = { von: userName, art, erinnerung_datum: document.getElementById('ha-erinnerung')?.value || null };
+  } else if (hAktionSchritt === 3) {
+    const entscheidung = document.querySelector('input[name="h-entscheidung"]:checked')?.value;
+    if (!entscheidung) { toast('Bitte Entscheidung wählen', 'error'); return; }
+    url  = `/api/hersteller/${hAktionId}/rueckmeldung`;
+    body = {
+      von: userName, entscheidung,
+      gutschriftsnummer:  document.getElementById('ha-gutschriftsnr')?.value.trim() || '',
+      gutschriftsbetrag:  document.getElementById('ha-gutschriftsbetrag')?.value.trim() || '',
+      rueckmeldung_text:  document.getElementById('ha-rueckmeldung-text')?.value.trim() || '',
+    };
+  } else if (hAktionSchritt === 4) {
+    url  = `/api/hersteller/${hAktionId}/erledigt`;
+    body = { von: userName };
+  }
+
+  try {
+    const fetchOpts = (hAktionSchritt === 1)
+      ? { method: 'PATCH', body }
+      : { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+    const res = await fetch(url, fetchOpts);
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.status);
+    const aktualisiert = await res.json().catch(() => null);
+    if (aktualisiert) {
+      const idx = alleHersteller.findIndex(x => x.id === aktualisiert.id);
+      if (idx !== -1) alleHersteller[idx] = aktualisiert;
+    }
+    closeHAktionModal();
+    if (hAktionSchritt === 4) {
+      closeHDetailModal();
+      const archivBtn = [...document.querySelectorAll('#hersteller-main .tab')].find(b => b.getAttribute('onclick')?.includes('archiv'));
+      setHFilter('archiv', archivBtn);
+      toast('Hersteller-Reklamation erledigt → Archiv', 'success');
+    } else {
+      toast('Gespeichert', 'success');
+    }
+  } catch (e) {
+    toast('Fehler: ' + (e.message || 'Unbekannt'), 'error');
+  }
+}
+
+function hAddErinnerungEdit() {
+  const liste = document.getElementById('ha-erinnerungen-liste');
+  if (!liste) return;
+  const row = document.createElement('div');
+  row.className = 'erinnerung-row';
+  row.style.cssText = 'display:flex;align-items:center;gap:8px';
+  row.innerHTML = `<input type="date" class="erinnerung-datum-input" value="" style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;background:#2d3f55;color:var(--text);font-size:.9rem" />
+    <button type="button" onclick="this.closest('.erinnerung-row').remove()" style="background:none;border:none;color:var(--danger,#ef4444);font-size:1.3rem;cursor:pointer;line-height:1" title="Entfernen">×</button>`;
+  liste.appendChild(row);
+}
+
+// ── Erinnerungen verwalten Modal ──────────────────────────
+function openHErinnerungModal(id) {
+  const r = alleHersteller.find(r => r.id === id);
+  if (!r) return;
+  hAktionId      = id;
+  hAktionSchritt = 99;
+  document.getElementById('h-aktion-titel').textContent = '🔔 Erinnerungen verwalten';
+  document.getElementById('h-aktion-inhalt').innerHTML = `
+    <p style="color:var(--text2);font-size:.88rem;margin-bottom:12px">
+      Erinnerungen werden täglich geprüft. Bei Fälligkeit erhält <strong>service@pitupita.de</strong> eine E-Mail.
+    </p>
+    <div class="aktion-field">
+      <label>Erinnerungen
+        <button type="button" onclick="hAddErinnerungModal()" style="margin-left:8px;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:2px 10px;cursor:pointer;font-size:.85rem">+ Erinnerung</button>
+      </label>
+      <div id="ha-erinnerung-modal-liste" style="display:flex;flex-direction:column;gap:6px;margin-top:4px"></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+      ${[7,14,21,30].map(t => {
+        const d = new Date(); d.setDate(d.getDate()+t);
+        const val = d.toISOString().slice(0,10);
+        return `<button type="button" class="btn-frist-preset" onclick="hAddErinnerungModalMitDatum('${val}')">+${t} Tage</button>`;
+      }).join('')}
+    </div>`;
+  hRenderErinnerungenEdit(r.erinnerungen || [], 'ha-erinnerung-modal-liste');
+  document.getElementById('h-aktion-modal').classList.remove('hidden');
+}
+
+function hAddErinnerungModal() {
+  const liste = document.getElementById('ha-erinnerung-modal-liste');
+  if (!liste) return;
+  const row = document.createElement('div');
+  row.className = 'erinnerung-row';
+  row.style.cssText = 'display:flex;align-items:center;gap:8px';
+  row.innerHTML = `<input type="date" class="erinnerung-datum-input" value="" style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;background:#2d3f55;color:var(--text);font-size:.9rem" />
+    <button type="button" onclick="this.closest('.erinnerung-row').remove()" style="background:none;border:none;color:var(--danger,#ef4444);font-size:1.3rem;cursor:pointer;line-height:1">×</button>`;
+  liste.appendChild(row);
+  row.querySelector('input').focus();
+}
+
+function hAddErinnerungModalMitDatum(val) {
+  hAddErinnerungModal();
+  const liste = document.getElementById('ha-erinnerung-modal-liste');
+  if (!liste) return;
+  const last = liste.querySelector('.erinnerung-row:last-child .erinnerung-datum-input');
+  if (last) last.value = val;
+}
+
+// ── Erledigt rückgängig ───────────────────────────────────
+async function hErledigtRueckgaengig(id) {
+  const ok = await pitupitaConfirm({
+    title: 'Erledigung rückgängig?',
+    message: 'Die Reklamation wird wieder als offen markiert.',
+    confirmText: 'Rückgängig',
+  });
+  if (!ok) return;
+  try {
+    const res = await fetch(`/api/hersteller/${id}/erledigt-rueckgaengig`, { method: 'PATCH' });
+    if (!res.ok) throw new Error();
+    toast('Erledigung zurückgesetzt', 'success');
+  } catch { toast('Fehler', 'error'); }
+}
+
+// ── Hinweise ──────────────────────────────────────────────
+async function addHHinweis(id) {
+  const text = document.getElementById('h-hinweis-input')?.value.trim();
+  if (!text) { shake(document.getElementById('h-hinweis-input')); return; }
+  try {
+    const res = await fetch(`/api/hersteller/${id}/hinweis`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, von: userName }),
+    });
+    if (!res.ok) throw new Error();
+    toast('Hinweis gespeichert', 'success');
+  } catch { toast('Fehler', 'error'); }
+}
+
+function editHHinweis(rekId, idx) {
+  const item = document.getElementById(`h-hinweis-item-${rekId}-${idx}`);
+  if (!item) return;
+  const currentText = item.querySelector('.hinweis-text').textContent;
+  item.innerHTML = `
+    <textarea class="hinweis-edit-textarea" rows="2" maxlength="500">${escHtml(currentText)}</textarea>
+    <div class="hinweis-edit-actions">
+      <button onclick="saveHHinweis(${rekId}, ${idx})">Speichern</button>
+      <button class="btn-cancel" onclick="renderHDetail(alleHersteller.find(r=>r.id===${rekId}))">Abbrechen</button>
+    </div>`;
+  item.querySelector('textarea').focus();
+}
+
+async function saveHHinweis(rekId, idx) {
+  const item = document.getElementById(`h-hinweis-item-${rekId}-${idx}`);
+  if (!item) return;
+  const text = item.querySelector('textarea')?.value.trim();
+  if (!text) { shake(item.querySelector('textarea')); return; }
+  try {
+    const res = await fetch(`/api/hersteller/${rekId}/hinweis/${idx}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) throw new Error();
+    toast('Hinweis aktualisiert', 'success');
+  } catch { toast('Fehler', 'error'); }
+}
+
+// ── Löschen ───────────────────────────────────────────────
+async function loescheHersteller(id) {
+  const r = alleHersteller.find(r => r.id === id);
+  const ok = await pitupitaConfirm({
+    title: `Hersteller-Reklamation ${r?.nummer || ''} löschen?`,
+    message: 'Diese Reklamation wird unwiderruflich entfernt.',
+    confirmText: 'Löschen',
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    const res = await fetch(`/api/hersteller/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error();
+    toast('Reklamation gelöscht', 'info');
+    closeHDetailModal();
+  } catch { toast('Fehler', 'error'); }
+}
+
+// ── Initialisierung: Hersteller Badge beim Start laden ────
+document.addEventListener('DOMContentLoaded', () => {
+
+  // Periodisch Statistik aktualisieren
+  setInterval(() => {
+    if (aktuellerView === 'hersteller') {
+      aktualisiereHStatistik();
+    } else {
+      // Auch im Kunden-View die Badge aktualisieren (ohne full reload)
+      fetch('/api/hersteller/statistik').then(r => r.json()).then(d => {
+        const badge = document.getElementById('h-erinnerung-badge');
+        if (badge) {
+          badge.textContent = d.erinnerungen;
+          badge.classList.toggle('hidden', d.erinnerungen === 0);
+        }
+      }).catch(() => {});
+    }
+  }, 5 * 60 * 1000);
+
+  // Initial Badge laden
+  fetch('/api/hersteller/statistik').then(r => r.json()).then(d => {
+    const badge = document.getElementById('h-erinnerung-badge');
+    if (badge) {
+      badge.textContent = d.erinnerungen;
+      badge.classList.toggle('hidden', d.erinnerungen === 0);
+    }
+    const filterBadge = document.getElementById('h-filter-badge');
+    if (filterBadge) {
+      filterBadge.textContent = d.erinnerungen;
+      filterBadge.classList.toggle('hidden', d.erinnerungen === 0);
+    }
+  }).catch(() => {});
+});
+

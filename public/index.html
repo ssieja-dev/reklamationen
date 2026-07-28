@@ -109,7 +109,7 @@
         <span class="detail-status-badge" id="detail-status-badge"></span>
       </div>
       <div class="detail-close-bar">
-        <button class="btn-pdf" onclick="druckeReklamation()" title="Als PDF speichern / Save as PDF">
+        <button class="btn-pdf" onclick="openPdfSprachwahl()" title="Als PDF speichern / Save as PDF">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
           PDF
         </button>
@@ -119,6 +119,19 @@
         </button>
       </div>
       <div id="detail-content" class="detail-content"></div>
+    </div>
+  </div>
+
+  <!-- Kunden PDF Sprachwahl Modal -->
+  <div id="pdf-sprach-modal" class="modal-overlay hidden" style="z-index:400">
+    <div class="modal-box">
+      <h2>PDF-Sprache wählen</h2>
+      <p style="color:var(--text2);font-size:.88rem;margin-bottom:16px">In welcher Sprache soll die Reklamation neben Deutsch übersetzt werden?</p>
+      <div class="modal-actions" style="flex-direction:column;gap:8px">
+        <button class="btn-submit" onclick="druckeReklamation('en')" style="width:100%">🇬🇧 Englisch</button>
+        <button class="btn-submit" onclick="druckeReklamation('pl')" style="width:100%">🇵🇱 Polnisch</button>
+        <button class="btn-secondary" onclick="closePdfSprachwahl()" style="width:100%">Abbrechen</button>
+      </div>
     </div>
   </div>
 
@@ -167,6 +180,121 @@
     <button onclick="zeigeLoginModal()" class="session-banner-btn">Jetzt einloggen</button>
   </div>
 
+  <!-- Hersteller-Reklamation: Neue Anlage Modal -->
+  <div id="h-neu-modal" class="modal-overlay hidden">
+    <div class="modal-box large">
+      <h2>Neue Hersteller-Reklamation</h2>
+      <div class="form-grid">
+        <div class="form-group required">
+          <label>Lieferant / Hersteller</label>
+          <input type="text" id="h-lieferant" placeholder="z.B. Mustermann GmbH" maxlength="100" />
+        </div>
+        <div class="form-group">
+          <label>Rechnungsnummer Lieferant</label>
+          <input type="text" id="h-ansprechpartner" placeholder="z.B. RE-2026-0123" maxlength="100" />
+        </div>
+        <div class="form-group">
+          <label>Artikelnummer</label>
+          <input type="text" id="h-artikelnummer" placeholder="z.B. 21-4270-002" maxlength="50" />
+        </div>
+        <div class="form-group required">
+          <label>Artikelname</label>
+          <input type="text" id="h-artikelname" placeholder="z.B. Rinderlefzen" maxlength="100" />
+        </div>
+        <div class="form-group">
+          <label>Menge</label>
+          <input type="number" id="h-menge" value="1" min="1" max="99999" />
+        </div>
+        <div class="form-group">
+          <label>Einheit</label>
+          <input type="text" id="h-einheit" placeholder="kg, Stk., Krt." maxlength="20" value="Stk." />
+        </div>
+        <div class="form-group">
+          <label>Chargennummer</label>
+          <input type="text" id="h-chargennummer" placeholder="z.B. CH-2024-001" maxlength="80" />
+        </div>
+        <div class="form-group">
+          <label>Datum Befund</label>
+          <input type="date" id="h-datum-befund" title="Datum der Feststellung des Mangels" />
+        </div>
+        <div class="form-group">
+          <label>Datum Meldung an Lieferanten</label>
+          <input type="date" id="h-datum-meldung" title="Datum der Meldung an den Lieferanten" />
+        </div>
+        <div class="form-group full-width">
+          <label>Erinnerungen an Lieferanten
+            <button type="button" id="h-erinnerung-add-btn" onclick="hAddErinnerungNeu()" style="margin-left:8px;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:2px 10px;cursor:pointer;font-size:.85rem">+ Erinnerung</button>
+          </label>
+          <div id="h-erinnerungen-liste" style="display:flex;flex-direction:column;gap:6px;margin-top:4px"></div>
+          <span style="font-size:.75rem;color:var(--muted)">Bei Fälligkeit wird eine E-Mail an service@pitupita.de gesendet</span>
+        </div>
+        <div class="form-group full-width required">
+          <label>Beanstandung / Reklamationsgrund</label>
+          <textarea id="h-beanstandung" placeholder="Detaillierte Beschreibung des Mangels..." rows="4" maxlength="1000"></textarea>
+        </div>
+        <div class="form-group full-width">
+          <label>Fotos (optional)</label>
+          <div id="h-bilder-zone" class="bilder-dropzone">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <span>Bilder hierher ziehen oder <label for="h-bilder-input" class="dropzone-link">auswählen</label></span>
+            <input type="file" id="h-bilder-input" multiple accept="image/*" style="display:none" />
+          </div>
+          <div id="h-bilder-preview" class="bilder-vorschau"></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-submit" onclick="submitNeuHersteller()">Hersteller-Reklamation anlegen</button>
+        <button class="btn-secondary" onclick="closeHNeuModal()">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hersteller-Reklamation: Aktion Modal -->
+  <div id="h-aktion-modal" class="modal-overlay hidden" style="z-index:410">
+    <div class="modal-box">
+      <h2 id="h-aktion-titel"></h2>
+      <div id="h-aktion-inhalt"></div>
+      <div class="modal-actions">
+        <button class="btn-submit" id="h-aktion-btn" onclick="submitHAktion()">Bestätigen</button>
+        <button class="btn-secondary" onclick="closeHAktionModal()">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hersteller-Reklamation: Detail Modal -->
+  <div id="h-detail-modal" class="modal-overlay hidden" style="z-index:300">
+    <div class="modal-box xlarge">
+      <div class="detail-header">
+        <span class="detail-reklanr" id="h-detail-nr"></span>
+        <span class="detail-status-badge" id="h-detail-badge"></span>
+      </div>
+      <div class="detail-close-bar">
+        <button class="btn-pdf" onclick="openHPdfSprachwahl()" title="Als PDF speichern / Save as PDF">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+          PDF
+        </button>
+        <button class="modal-close" onclick="closeHDetailModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Schließen
+        </button>
+      </div>
+      <div id="h-detail-content" class="detail-content"></div>
+    </div>
+  </div>
+
+  <!-- Hersteller PDF Sprachwahl Modal -->
+  <div id="h-pdf-sprach-modal" class="modal-overlay hidden" style="z-index:400">
+    <div class="modal-box">
+      <h2>PDF-Sprache wählen</h2>
+      <p style="color:var(--text2);font-size:.88rem;margin-bottom:16px">In welcher Sprache soll die Reklamation neben Deutsch übersetzt werden?</p>
+      <div class="modal-actions" style="flex-direction:column;gap:8px">
+        <button class="btn-submit" onclick="druckeHerstellerReklamation('en')" style="width:100%">🇬🇧 Englisch</button>
+        <button class="btn-submit" onclick="druckeHerstellerReklamation('pl')" style="width:100%">🇵🇱 Polnisch</button>
+        <button class="btn-secondary" onclick="closeHPdfSprachwahl()" style="width:100%">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Seitenüberschrift -->
   <div class="page-title">Reklamationen</div>
 
@@ -194,7 +322,20 @@
     </div>
   </div>
 
-  <main>
+  <!-- View-Tabs -->
+  <div class="view-tabs">
+    <button class="view-tab active" id="tab-kunden" onclick="setView('kunden')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+      Kunden-Reklamationen
+    </button>
+    <button class="view-tab" id="tab-hersteller" onclick="setView('hersteller')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+      Hersteller-Reklamationen
+      <span id="h-erinnerung-badge" class="view-tab-badge hidden">0</span>
+    </button>
+  </div>
+
+  <main id="kunden-main">
     <section class="card list-card">
       <div class="card-header">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
@@ -253,10 +394,86 @@
     </section>
   </main>
 
+  <!-- Hersteller-Reklamationen Hauptbereich -->
+  <main id="hersteller-main" class="hidden">
+    <section class="card list-card">
+      <div class="card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+        <h2>Hersteller-Reklamationen</h2>
+        <button class="btn-export hidden" id="h-btn-export" onclick="exportHerstellerCSV()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export
+        </button>
+        <button class="btn-neu hidden" id="h-btn-neu" onclick="openHNeuModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Neue Reklamation
+        </button>
+      </div>
+
+      <!-- Hersteller Statistik-Leiste -->
+      <div class="h-stats-bar">
+        <div class="h-stat-item">
+          <span class="h-stat-num blue" id="h-stat-offen">0</span>
+          <span class="h-stat-label">Offen</span>
+        </div>
+        <div class="h-stat-item">
+          <span class="h-stat-num orange" id="h-stat-gesendet">0</span>
+          <span class="h-stat-label">Gesendet</span>
+        </div>
+        <div class="h-stat-item">
+          <span class="h-stat-num purple" id="h-stat-rueckmeldung">0</span>
+          <span class="h-stat-label">Rückmeldung</span>
+        </div>
+        <div class="h-stat-item">
+          <span class="h-stat-num green" id="h-stat-erledigt">0</span>
+          <span class="h-stat-label">Erledigt</span>
+        </div>
+        <div class="h-stat-item" id="h-stat-erinnerung-card" style="display:none">
+          <span class="h-stat-num red" id="h-stat-erinnerungen">0</span>
+          <span class="h-stat-label">Erinnerungen</span>
+        </div>
+        <div class="h-stat-item">
+          <span class="h-stat-num gray" id="h-stat-gesamt">0</span>
+          <span class="h-stat-label">Gesamt</span>
+        </div>
+      </div>
+
+      <div class="list-toolbar">
+        <div class="filter-tabs">
+          <button class="tab active" onclick="setHFilter('aktiv', this)">Alle aktiven</button>
+          <button class="tab" onclick="setHFilter('offen', this)">Offen</button>
+          <button class="tab" onclick="setHFilter('gesendet', this)">Gesendet</button>
+          <button class="tab" onclick="setHFilter('rueckmeldung', this)">Rückmeldung</button>
+          <button class="tab" onclick="setHFilter('erinnerungen', this)">
+            🔔 Erinnerungen
+            <span id="h-filter-badge" class="filter-erinnerung-badge hidden"></span>
+          </button>
+          <button class="tab" onclick="setHFilter('archiv', this)">Archiv</button>
+        </div>
+        <div id="h-aktiv-toolbar" class="sammel-toolbar hidden">
+          <select id="h-aktiv-lieferant-select" onchange="renderHListe()">
+            <option value="">Alle Lieferanten</option>
+          </select>
+        </div>
+        <div class="search-bar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="h-search-input" placeholder="Nummer, Lieferant, Artikel..." oninput="renderHListe()" />
+        </div>
+      </div>
+
+      <div id="h-rekla-liste">
+        <div class="loading">
+          <div class="spinner"></div>
+          <span>Lade Daten...</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
   <div id="toast-container"></div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="confirm-dialog.js?v=1"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

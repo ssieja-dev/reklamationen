@@ -42,11 +42,12 @@ body {
   position: fixed; inset: 0;
   background: rgba(0,0,0,.75);
   backdrop-filter: blur(6px);
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: flex-start; justify-content: center;
   z-index: 200;
   padding: 16px;
   overflow-y: auto;
 }
+.modal-overlay .modal-box { margin: auto 0; }
 .modal-overlay.hidden { display: none; }
 #aktion-modal { z-index: 400; }
 .modal-box {
@@ -894,6 +895,174 @@ input:-webkit-autofill {
 }
 
 /* ── Responsive ───────────────────────────────────────── */
+/* ── View-Tabs ────────────────────────────────────────── */
+.view-tabs {
+  display: flex;
+  gap: 0;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 16px;
+  border-bottom: 2px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.view-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  font-family: inherit;
+  font-size: .92rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+  white-space: nowrap;
+  position: relative;
+}
+.view-tab svg { width: 16px; height: 16px; }
+.view-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+.view-tab:hover:not(.active) { color: var(--text2); }
+.view-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  background: var(--red);
+  color: #fff;
+  font-size: .7rem;
+  font-weight: 700;
+  border-radius: 99px;
+  padding: 0 5px;
+  animation: badgePulse 2s ease-in-out infinite;
+}
+@keyframes badgePulse {
+  0%,100% { transform: scale(1); }
+  50%      { transform: scale(1.15); }
+}
+
+/* ── Hersteller Statistik-Leiste ─────────────────────── */
+.h-stats-bar {
+  display: flex;
+  gap: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.h-stat-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: .75rem .5rem;
+  border-right: 1px solid var(--border);
+  gap: .2rem;
+}
+.h-stat-item:last-child { border-right: none; }
+.h-stat-num {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  transition: all .3s;
+}
+.h-stat-num.blue   { color: var(--blue); }
+.h-stat-num.orange { color: var(--orange); }
+.h-stat-num.purple { color: #a855f7; }
+.h-stat-num.green  { color: var(--green); }
+.h-stat-num.red    { color: var(--red); }
+.h-stat-num.gray   { color: var(--text2); }
+.h-stat-label {
+  font-size: .7rem;
+  color: var(--muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+/* ── Frist-Chips ──────────────────────────────────────── */
+.frist-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: .72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.frist-ueberfaellig {
+  background: rgba(239,68,68,.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239,68,68,.4);
+  animation: fristPulse 1.5s ease-in-out infinite;
+}
+.frist-heute {
+  background: rgba(251,146,60,.2);
+  color: #fdba74;
+  border: 1px solid rgba(251,146,60,.4);
+}
+.frist-bald {
+  background: rgba(251,191,36,.15);
+  color: #fde68a;
+  border: 1px solid rgba(251,191,36,.3);
+}
+.frist-ok {
+  background: rgba(100,116,139,.15);
+  color: #94a3b8;
+  border: 1px solid rgba(100,116,139,.2);
+}
+@keyframes fristPulse {
+  0%,100% { box-shadow: none; }
+  50%      { box-shadow: 0 0 8px rgba(239,68,68,.5); }
+}
+
+/* ── Filter-Erinnerungs-Badge ─────────────────────────── */
+.filter-erinnerung-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  background: var(--red);
+  color: #fff;
+  font-size: .65rem;
+  font-weight: 700;
+  border-radius: 99px;
+  padding: 0 4px;
+  margin-left: 3px;
+}
+
+/* ── Frist-Preset-Buttons ─────────────────────────────── */
+.btn-frist-preset {
+  padding: 5px 12px !important;
+  background: var(--bg3) !important;
+  border: 1px solid var(--border2) !important;
+  border-radius: 6px !important;
+  color: var(--text2) !important;
+  font-size: .82rem !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: background .12s, color .12s !important;
+  width: auto !important;
+  display: inline-flex !important;
+  margin-bottom: 0 !important;
+}
+.btn-frist-preset:hover { background: var(--bg2) !important; color: var(--text) !important; }
+.btn-frist-del { color: var(--red) !important; border-color: rgba(239,68,68,.4) !important; }
+.btn-frist-del:hover { background: rgba(239,68,68,.1) !important; }
+
+/* ── Tablet ───────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .view-tab { padding: 12px 14px; font-size: .85rem; }
+  .h-stat-num { font-size: 1.3rem; }
+}
+
 @media (max-width: 600px) {
   .stats-bar { flex-wrap: wrap; gap: .5rem; padding: .5rem .75rem; }
   .stat-card { min-width: calc(50% - .25rem); padding: .6rem .5rem; }
@@ -906,6 +1075,10 @@ input:-webkit-autofill {
   .header-inner { padding: .75rem 1rem; }
   .header-logo { height: 30px; }
   .filter-tabs { flex-wrap: wrap; }
+  .view-tab { padding: 10px 12px; font-size: .8rem; gap: 5px; }
+  .view-tab svg { display: none; }
+  .h-stats-bar { flex-wrap: wrap; }
+  .h-stat-item { min-width: calc(33% - 1px); }
 }
 .portal-back-btn {
   display: inline-flex; align-items: center; gap: .4rem;
